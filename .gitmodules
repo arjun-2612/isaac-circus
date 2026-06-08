@@ -1,0 +1,6 @@
+[submodule "IsaacLab"]
+	path = IsaacLab
+	url = https://github.com/isaac-sim/IsaacLab.git
+[submodule "robotarium"]
+	path = robotarium
+	url = https://github.com/arjun-2612/robotarium.git

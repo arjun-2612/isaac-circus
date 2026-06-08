@@ -1,0 +1,103 @@
+5/28/25:
+
+Revisit go2 flat terrain training on IsaacSim 4.5.0 
+367203
+    Works well, but I had height scan in place, so could not simulate 
+
+5/30/25:
+
+Reduced frequency 500 -> 200 Hz 
+Reduce decimation 10 -> 4 (50 Hz)
+Removed height scanner 
+383089
+    Gait is more hopping than trotting, maybe the frequency is important for the desired behavior 
+
+Increase frequency to 500 Hz and decimation to 10 
+398331
+    Not working in sim, legs just don't move
+
+Adding base lin vel as observation 
+398334
+    Not working in sim, legs just don't move 
+
+6/29/25:
+
+Using spot reward structure as a baseline starting point 
+792187
+    It works well in train and play, but when I put it in sim, it does something very different
+    Maybe joint ordering is wrong? 
+
+Training with specific order of joints with order preservation
+Using DC Motor config
+798849
+
+7/7/25:
+
+Retraining with rendering
+906502
+    Trains nicely, but does not work in isaacsim. Since huskyb works fine, there is a bug in go2 
+
+7/20/25:
+
+Retraining go2 again with delayed PD actuator cfg 
+1085730
+    Looking good in training, needs sim 
+
+7/21/25:
+
+Adding history buffer for some observations
+Removed lin vel 
+More aggressive DR
+Adding friction values from chat to actuators
+1101180
+    Is walking, but joints are too jittery 
+
+7/23/25:
+
+Using DC motor cfg, as this implements power limiting already 
+Some modifications to rewards and weights 
+1187511
+    Jittery joints still, but it is standing and moving to all commands, needs testing
+
+7/25/25:
+
+Increase damping on joints 0.5 -> 0.75
+1201501
+    Same behavior still
+
+Increase history length 5 -> 15 
+1211710
+    Same behavior 
+
+7/27/25:
+
+Train without any buffering and no lin vel observation 
+Go2 action mapping is different when it is applied in IsaacSim vs IsaacLab, needs to be fixed
+1231481
+    This one works much better, although it is not good trotting
+    But it works!
+
+Train at 200 Hz 
+1291697
+    Works meh, bounces around a lot 
+
+8/1/25:
+
+Train with A2C approach, with critic observing base lin vel 
+Buffer some observations 
+Tune noise values based on specs
+1312486
+    Seems to work, but needs more time 
+
+8/2/25:
+
+Retrain for longer (5k epochs)
+1328125
+    Looks good in sim, but the noise is not modelled right for deployment
+    Acceleration noise is crazy high, need to model this or just not use it
+
+Adding power penalty 
+Remove joint vel and acc penalties
+Retrain with buffered ang vel 5
+1336940
+    Works great in isaacsim, needs deployment to verify

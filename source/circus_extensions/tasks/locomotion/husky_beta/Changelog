@@ -1,0 +1,1450 @@
+12/10/24:
+
+Actuator gains redone
+    Hip X: P = 20.0, D = 1.5
+    Hip Y: P = 25.0, D = 0.5
+    Knee: P = 20.0, D = 0.75
+
+        Observed large actions destabilizing the environment
+            Large penalty for action smoothness 
+
+Action smoothness penalty weight -1.0 -> -10.0
+    Observed robots do not even move anymore
+
+Updated termination to be when it leaves its environment and not off the whole map
+
+Action smoothness penalty weight -10.0 -> -3.0
+    Still too sensitive and instead of moving it hops around
+
+Action smoothness penalty weight -3.0 -> -1.0
+
+Foot clearance increased 0.1 -> 0.25
+
+Changed gait reward to give 0 reward when no command is given
+Changed default joint position penalty to penalize only based off command and not body velocity
+    Observed robots with 0 cmd barely move, but still have some movement by air time
+
+Changed air time reward to do the same thing as with gait  
+    Looks more promising and the robots are not moving (still little movement seen)
+    Hops a lot and doesn't actually move smoothly
+
+Changed just cmd > 0.0 to torch.logical_and(cmd > 0.0, body_vel > velocity_threshold)
+    Consider some minimum velocity to classify robot as moving (actually make it move)
+    Robot just drags across the floor instead of walking
+
+Set velocity_threshold to 0.15 m and foot clearance to 0.25 m
+Increased foot clearance reward to 1.5
+    It is very rigid motion and joints do not move much
+
+Changed joint gains     
+    Hip X: P = 15.0
+    Hip Y: P = 20.0, D = 0.75
+    Knees: P = 15.0, D = 1.0
+    Observed it commands large actions and destabilizes environment 
+
+12/11/24:
+
+Changed all rewards to only be given when a command is given 
+Added new reward for standing still that is only given when cmd = 0.0
+Removed air time reward -> gait already takes care of this
+Changed rewards to only be based off cmd given 
+    Observed that the robot barely moves it joints and keeps it by the default positions
+
+Changed rewards back to like Spot
+Put back air time reward 
+Changed all actuators to be DelayedPDActuator with same gains (P = 25.0, D = 0.75, E = 10.6)
+Changed joint positions for back sagittal and knee joints
+    Gait was too fast and slipped a lot
+    Robot sprawls out initially in sim and then tips over 
+    Sometimes just hangs in sprawled out position and doesn't move 
+    No backward motion learned
+
+12/16/24:
+
+Added print statements to see if zero rewards are actually generated
+Changed rewards to only give reward when there is a command and body velocity is over a threshold 
+    Can see the output that there are some environments with no reward, meaning zero command magnitude
+
+Removed logical and for air time, and merged linear and angular velocity tracking
+Stand still reward gives greater reward for joint velocities and accelerations being 0 when no command is given
+Foot clearance reward is now giving more reward for faster foot Z velocities (previously for XY velocities)
+    Robot still does the random walking, and does not walk backwards 
+    0 reward causes random behavior as it does not learn anything
+
+12/17/24:
+
+Added a stance gait reward for no command 
+Changed foot clearance target to 0.0 when no command is given 
+    Still the same issue. Reverse commands are not obeyed, and zero commands generates forward velocity 
+
+12/18/24:
+
+Running on Spot to see if there is any difference
+    There is, meaning that the URDF or control side is the issue on Huskyb
+    Noticed that all CoM placements are wrong on URDF, corrected it 
+        Needs IsaacSim to get the new USD
+    
+
+12/19/24:
+
+Ran new training with new USD 
+    It is fixed. No more random walking. 
+
+Ran new training with stairs and waves environment 
+    Large actions destabilize the environment 
+
+Reverted to spot MDP and rerunning stairs and waves environment
+    Actions are still destabilizing. I think it is not able to climb stairs and as a result generating a large action to shoot it up
+    Needs updated foot clearance reward
+
+12/22/24:
+
+Decreased base_motion and base_orientation reward weights from -1.0 -> -0.5 and -1.0 -> -0.1 respectively
+Changed foot clearance reward to include the tanh multiplier 
+    Still large actions. Looking at the policy output in IsaacSim, it is clear that the front legs are not stable and robot is pitching forward
+    Maybe the joint stiffness or effort is too low? It seems the robot cannot reach the given initial joint positions
+
+Updated URDF with mimic joints and increased sagittal hip limits
+    I believe the large action instability may be because the limits are wrong and it is trying to break past them to get to where it wants
+
+Running new training with new USD
+    Large action vectors are being generated, and the walk forward with no command is back again. Might be the new joint limits causing this, or reward structure
+
+12/23/24: 
+
+Changing back to old reward structure with logical_and
+Changed joint limits back and added -40 degrees to sagittal hip joints 
+Changed gains on PD actuator for hip xy and knee 
+    Hip XY P: 20, D: 0.5 
+    Knee P: 30, D = 1.0
+        Observed the robot just does not move at all
+
+12/24/24:
+
+Reverted back to working changes on 12/19 with new USD and retraining
+    Moving backwards is an issue. Maybe the norm matching in rewards doesn't take into account the sign 
+    Cannot see just linear XY movement, always angular -> robot not learning to just walk forwards or sidestep
+
+12/25/24:
+
+Updated rewards to have penalty for roll/pitch and z motion separated 
+Made robot lower to ground and changed joint limits (maybe backward motion will be better now) 
+    Large actions destabilization. Meaning it is trying to do something and can't, so it breaks the system to do that
+    Still unable to walk backwards, so this could be the source of the issue
+
+12/27/24:
+
+Change command ranges to be fully negative in lin XY, and 0 in ang Z, to isolate why it is not moving backwards and breaking the system
+    Observed that it is unable to actually move its feet up and back, they are just stuck to the ground 
+    Maybe foot clearance is an issue? 
+
+Increase foot clearance height from 0.025 -> 0.1 (what are the units?)
+    Still no change
+
+11/15 training video 16000 shows a robot moving backwards. The changes from then to now are 
+    1. Joint init positions 
+    2. Rewards using logical_or instead of logical_and 
+    3. URDF errors
+    Maybe changing the joint init positions will help with getting back to that stage? 
+
+Changed husky beta lab asset file to 11/15 one (joint positions)
+Changed command ranges to be -1,1 for all components 
+    Seeing some backward motion now, looking good 
+    Observed that it is moving backwards in training but not in IsaacSim, why? 
+    It is also hopping for turning, due to reduced Z motion penalty
+    Has not learned forward gait or backward gaits, just hopping
+
+12/29/24:
+
+Reverted back to spot reward structure
+Removed videos during training and switched to v100. Want to run more episodes in 8 hours so it can learn more
+    Observed way more training in a shorter time, it has learned to do everyting except walk backwards
+    Default action is to sidestep back and to the right now (changed from forward walking) -> could this be URDF? 
+    Large actions cause destabilization (possibly backwards walking breaking the system, could this be URDF?)
+
+Reduced angular velocity std 2.0 -> 1.0
+Added stance gait to GaitReward to stop 0.0 reward creating randomness in actions taken
+    Same thing
+
+Changed logical_or to logical_and in joint positions penalty
+    After 8 hours of no issue training, it is doing everything except backwards motion. Also slight drift in dynamic trotting
+
+12/30/24:
+
+Resumed from previous run to see if backwards motion just needs more time to learn
+    Large actions 
+
+Chenghao got backward motion working, so updated to his joint values and running a training 
+    Bad movement, large actions killed training early
+
+12/31/24:
+
+Running with new joint init positions again
+    Trained fully, but glitches out in IsaacSim and fails
+
+Going back to my joint values, and set gait time 0.3 -> 0.8 as in firmware code 
+    Large actions
+
+Switched velocity calculations in reward to be in world frame and not base frame
+    Large actions
+
+Updated gait period reward to be exp based rather than a clip and 0 reward based structure
+Will try to keep as close to mode_time as possible now
+Updated joint positions to Chenghao's positions
+Changed mode_time 0.8 -> 0.5
+CHanged all velocity calculations to be in body frame again
+    Underactuated motion, and backward motion not learnt. It does all other commands however 
+    Large actions
+
+1/1/25:
+
+Reduced stiffness and damping 25.0 -> 20.0 and 0.75 -> 0.5 respectively 
+    Immediate destabilization, but trained all the way
+
+Reverted gains back 
+Set rigid object max lin and ang vel to 3.0 from 1000.0
+Changed init joint positions from RViz to a state that robot will not tip over in default position
+    Large actions
+    Poorly trained, but very fast trotting in place, no reverse commands learnt
+
+Changed joint position penalty to logical_or again instead of logical_and
+    Large actions
+    Immediate destabilization
+
+Reduced RPZ and orientation penalties from -2.0 -> -1.0 and -3.0 -> -1.0 respectively 
+Increased air time variance penalty 1.0 -> 1.5
+    Destabilization after some time as it cannot balance itself
+
+Increased foot clearance weight 0.5 -> 1.0
+Reverted RPZ and orientation penalties 
+    Large actions
+    Immediate destabilization
+
+Got a policy working from 12/30/24 9:53 AM
+
+Training stairs and waves with curriculum
+Reverted init joints to 12/30 version 
+    Large actions killed training early
+
+1/2/25:
+
+Running another training on flat terrain to deal with drifting issue on trotting in place
+Changed velocity threshold 0.15 -> 0.05 to see if it's just going a little over to get the other rewards
+Change gait period stance reward to be exp of negative air time, so it will try to keep air time to be 0 when no command is given
+    Robot cannot balance itself and destabilizes 
+    Large actions killed training early 
+
+Reverted back to 12/30/24 9:53 AM version to try to get the same results back
+    Completed 8 hours of training 
+    Looks good and does not drift much now, works really well 
+
+Changed joint positions penalty to logical_or from logical_and 
+    Large actions killed training early 
+    Looks good and does not drift, works really well 
+
+1/3/25:
+
+Changed gait period reward again to be from 1/2/25 and see what happens. Maybe I can increase the gait period now effectively 
+    Value function loss is too high, seems liike it will die soon to large actions 
+    Died after 3450 iterations 
+    Does not walk at all
+
+Decided to keep gait period just as is, because it is working fine
+Changed init joint positions to keep robot stable while standing 
+    Training died early, and robot is moving forward with no command. Joint init positions are not obeyed
+
+Increase foot clearance weight 0.5 -> 5.0, and changed target height 0.1 -> 0.025 (100 cm -> 25 cm)
+Changed init joint positions back to when it was working fine
+    Trained full 8 hours, 7550 iterations 
+    Policy looks good, but the gait period appears to be too short
+
+1/4/25:
+
+Changed gait period 0.3 -> 0.6
+    Died to large actions. It is not syncing the air times and contact times. Two legs are meeting air times and 2 meeting contact times, but it is always those 2, never interchanged 
+
+Changed gait period 0.6 -> 0.4 
+    Does not walk properly and just died in trainnig early
+
+Added new termination terms for invalid joint pos, vels, and efforts 
+    Thjrows error saying tensor of dimension 1 cannot access the values
+
+1/5/25:
+
+1/3/25 21:54:16 policy seems to be the best one out there, with minimal drift and trotting in place 
+Continuing training from its checkpoint for 8 more hours 
+    Died to large actions after 11400 iterations 
+    Got worse because of it 
+
+1/6/25:
+
+Performed ROS2 side revamp to get the policy implemented with ROS2 Humble 
+Added sim and physical workspaces. Physical workspace under more work for now 
+
+Started training stairs and waves environment with curriculum 
+    It seems the raycaster occupies a lot of RAM, so only 256 envs are training instead of 4096
+
+Switched LiDAR pattern to grid pattern, since that is more RAM friendly
+    Seems to just not work well, don't know why 
+
+1/7/25: 
+
+Got training working with incorporating privileged information into rewards 
+    1.0,1.0 Raycaster boundary 
+
+Increased Raycaster boundary to 2.0, 2.0 since it seems like the robots are not moving up stairs 
+    Still bad at training 
+
+Consulted ETH Zurich supplementary material 
+Chnaged actor/critic NN layers 512,256,128 -> 256,128,64 
+Changed activation function elu -> tanh 
+Increased episode length 20 -> 400 
+Corrected foot clearnace for stairs and waves to have a clearance target for each foot rather than one for all 
+    Robots do not move, maybe due to too high of a penalty 
+    Total reward is also very bad, so maybe nothing is being learnt (might need better NN)
+
+Reverted NN layers back 
+    Robot still not actually moving 
+
+1/8/25: 
+
+Reverted episode length back
+Reverted back to elu activation function 
+    Robots do not seem to move 
+
+Running second training on flat env with higher foot clearance target and longer gait period 
+    Large actions killed trainig, but it did really well before dying 
+    Cap. It is only meeting air and contact time for 2 of 4 feet. 2 feet meet air time goal and the other two meet contact time goal, but not alternate
+    
+1/10/25:
+
+Removed gait reward and kept everything else
+    Just jumps and doesn't actually walk
+
+Increased foot clearance weight and removed gait period reward too 
+    Robot does not move but jumps around and balances on the slanted terrains
+
+Running in srun session to check what the foot clearances are according to the scans 
+Removed air time variance penalty and increased foot clearance weight 2.5 -> 5.0
+Increased velocity tracking reward weight 5.0 -> 10.0
+    Can see the foot clearances are actually being set right in world frame 
+    But the robot does not want to move forward, especially while climbing terrain 
+
+1/11/25:
+
+Training from the working flat terrain checkpoint model to see if it really is the gait that is issue 
+    Cannot copy from flat terrain as there is no privileged information 
+
+1/12/25:
+
+Changed init joint states
+Removed gait and gait period rewards 
+Increased number of environments 1024 -> 2048 (testing GPU RAM limits with RayCaster)
+    Something is killing training by large actions super fast and idk what 
+    Maybe height scans as observation is killing training? 
+
+Clipping height scanner to (-1.0, 1.0) from (-2.0, 2.0)
+Changed video interval to be 500 timesteps and 4096 envs 
+Changed std on foot clearance 0.05 -> 0.1
+Changed min height 0.125 -> 0.1
+Changed weight on foot clearance 0.5 -> 5.0
+Increased spawn height 0.57 -> 0.6
+    It is still not moving and just not training well enough 
+
+Using the IsaacLab configurations used in ANYmal C robot (with slight changes here and there)
+    Had to run on 512 envs because 4096 ran out of memory 
+    512 is super slow to learn, needs a lot of time to get to good point 
+
+Got it working with 3072 envs 
+Added foot clearance and foot slip reward and penalty from previous flat terrain policy 
+Chnaged weights to reflect according to Spot and Huskyb flat terrain policy 
+    Same thing 
+
+1/14/25:
+
+Changed perspective to see what is happening
+    The robots are falling and not terminating, due to the collisions penalty in place 
+
+Removed collisions penalty, and gait period reward, along with some other weight changes 
+    Robot seems to be slipping a lot and not able to actually move the joints forward or sideways 
+
+Made terrains a little simpler to start 
+No more foot clearance with scans, it just is a base height to reach all the time 
+    This works really well. Robot clears the curriculum and does not die at any point
+    Just did it so slow the 8 hour time period stopped
+
+1/15/25:
+
+Adding gait reward to get some trotting gait resemblance instead of galloping gait (weight 2.5)
+    Shows a little more trotting like behavior, but still not enough to be aesthetically pleasing
+    Moves forward faster than backward 
+    Legs are more sprawled out, maybe add some penalty for just frontal hip? 
+
+Increased gait weight 2.5 -> 4.0
+    Progressing curriculum a little slower but they are still progressing, so it is good so far (100 episodes)
+    It's most like the trotting now, doing well standing in place and walking in all directions 
+    But has not progressed through all the environments still 
+    Completed 2000 episodes, but did not get through entire curriculum 
+
+1/17/25:
+
+Running a resume training from the previous checkpoint 
+    It seems that after a certain height the robot is not able to clear it, maybe due to static foot clearance reward
+
+Changed clearance threshold on foot clearance with scan reward 0.125 -> 0.25
+    Still same behavior, it is not progressing entire curriculum. Maybe the curriculum design is the issue? 
+
+1/18/25:
+
+Changed terrain difficulty to be easier to traverse
+    Random rough has most difficulty, and inverted stairs is second most 
+
+Changed lin Z vel penaltiy 1.0 -> 0.5 
+Changed foot clearance reward 5.0 -> 6.5
+Change random rough roughness 0.1 -> 0.05 max 
+Changed curriculum and out of bounds termination to be with radius distance rather than diameter distance 
+Increased command resample time to episode length 10 -> 20 seconds 
+    Died to large actions 
+
+Reverted reward changes back 
+    Died to large actions 
+
+1/19/25:
+
+Reverted command resample time back 
+    Died to large actions 
+
+1/20/25:
+
+Reverted termination by out of bounds back 
+    Died to large actions 
+
+Corrected raycaster range 1.6 -> 1.0 (maybe that was the issue since value function loss was not inf)
+Basically reverted everything back to when it was working 
+    Stopped at 900, but it looks good 
+
+1/21/25:
+
+Got it working as per 1/17/25 again, phew 
+Changed out of bounds termination and curriculum progression code (see 1/18/25 training)
+    Progressing a lot further up the curriculum, but not completing it yet (maybe need more time?)
+
+1/23/25:
+
+Redoing the same training but with less video recordings (2000 -> 10000 interval)
+    Ran to completion, but is still not progressed through the entire curriculum
+
+1/24/25:
+
+Changed Z velocity penalty -1.0 -> -0.5
+    Doesn't seem to do anything 
+
+Changed Z penalty back to -1.0
+Changed base lin vel tracking 10.0 -> 7.5 
+Changed foot clearance 5.0 -> 10.0
+    Still the same thing. It looks like the feet are not coming up enough, so the robot just hops 
+    Maybe some air time reward needs to be specified? 
+
+1/26/25:
+
+Added an air time reward (gait period)
+    The feet actually leave the ground and it trots a lot better now, but still cannot pass the entire curriculum
+    The velocity is not being met for some reason (maybe somethign is holding it back?)
+
+1/27/25:
+
+Make terrain a little easier 
+    Died too soon, but I don't think it is the terrain that is keeping it from progressing 
+
+Reduced std for errors on velocity tracking 1.0 -> 0.25 (follow velocity closer)
+    Made it worse, since it has no reward to work with to meet the velocities 
+
+1/28/25:
+
+Added a fine tuned velocity tracking reward with 0.25 std (for greater accuracy on top of regular 2.0 std reward)
+    Still not a lot of movement 
+
+1/30/25: 
+
+Retraining flat policy again with greater mass distribution for domain randomization
+Running training at 250 Hz instead of 500 Hz, to match physical hardware update rate 
+
+Reverted back to 1/26 training when it was lifting the feet off the ground 
+Updated terminations and curriculum to be XY position based rather than radius based (goes to the edge of the terrain now)
+Increased linear velocity weight 7.5 -> 10.0
+    Just hopping to the goal velocities rather than actually walking, so maybe gait sync is more important now? 
+    
+Decreased air time weight 5.0 -> 3.0
+    Doesn't move at all so air time is very important to get the foot off the ground 
+
+Reverted air time back, and increased z velocity penalty -1.0 -> -1.5
+    Seems to work well, but I guess the lack of curriculum progression on some terrain is because of physical restrictions
+
+2/2/25:
+
+Made terrains more representative for robot traversability
+    Robot still does not want to traverse all the terrain, but it is looking more uniform now 
+    Maybe its the way the curriculum works now instead of the rewards 
+
+2/5/25:
+
+Noticed flat policy on robot is moving too fast at joint level
+Increase joint vel penalty -1e-2 -> -5e-2
+Increase joint acc penalty -1e-4 -> -5e-4
+Decrease joint pos penalty -0.7 -> -0.5
+Reduced sim dt 500 -> 250 Hz 
+    Died to large actions very soon, so probably learnt nothing 
+    Is able to sort of trot in place, and rotate, but no linear movement is learnt yet 
+
+Running stairs and waves at 250 Hz too 
+    Just doesn't move the robot at all 
+
+2/6/25:
+
+Continue the flat policy that died early from checkpoint 
+    Dies instantly, because it is already so unstable. Changing the penalties does not work 
+
+2/7/25:
+
+Revert penalties and run flat policy at 250 Hz 
+    Died after 2950 iterations to large actions 
+
+Updated decimation 10 -> 5 so it stays at 50 Hz (maybe that is the issue for dying?)
+    Died again 
+    Seems like frequency is an issue 
+
+Reverted back to 500 Hz Training
+    Got a policy working, but the legs are too far out, need to push them in for Huskyb real to balance 
+
+2/8/25: 
+
+Moved legs in a little on frontal hip joint
+    Died after 3078 iterations, don't know why 
+
+Reduced foot clearance 0.2 -> 0.1 
+    Doesn't seem to be any improvement 
+
+Resume from previous dead checkpoint 
+    Died almost instantly (think it will do that everytime)
+
+2/9/25:
+
+Found the init configuration is wrong, causing robot to pitch forward, and that may be a reason why it is not working 
+Fixed init configuration to new joint positions 
+Training at 250 Hz 
+    Died after 4900 iterations, cannot simulate it either 
+
+Training same policy at 500 Hz 
+    Died too early 
+
+2/11/25:
+
+Increase velocity threshold 0.15 -> 0.025
+Training at 250 Hz (from 500 Hz) and decimation 10 -> 5
+Set joint position from default (-0.45, 0.45) -> (-0.25, 0.25) in domain randomization 
+    Training does not look good for standing, and walking also shows bad gait learnt 
+    The velocity threshold does not help it seems 
+    Robot went to bad initial state and does not balance well 
+
+2/12/25:
+
+Changed back to when it was working on 1/3/25, when the robot stood still when no command was given
+Reduced mass domain randomization (-0.5, 0.5) -> (-0.25, 0.25)
+Increase foot clearance weight 0.5 -> 5.0
+    Does not execute all commands properly, basically just walks forward when there is no command input 
+
+Running same training on v100 without RTX 
+    Died after 5650 iterations 
+    Spawns in a really weird configuration (legs are sprawled out) and does not execute all walking commands 
+
+CHanged foot clearance weight 5.0 -> 0.5
+Reverted back domain randomization for base mass (-0.5, 0.5) -> (-0.1, 0.1)
+    PhysX error, shoots off into the sky 
+
+Running same training with RTX on 
+    Same PhysX error, looking at the text file output, the loss function value is huge, definityely the reason behind this 
+
+Running a training with old init positions, which made the flat policy work for the other robot (hopefully it will figure out a different position?) with RTX
+    Cannot walk backwards 
+    Drifting forward 
+
+Running same training without RTX 
+    Died way too early, I think it is because the joint positions are just invalid for the robot in the full USD 
+    Large actions 
+
+Running new training with new init positions from RViz without RTX 
+    Died too early to large actions 
+
+2/13/25:
+
+Removed joint position penalty 
+Gait reward always given sync * async now 
+Changed back init positions to 2/11/25 and before 
+Made all rewards only take command instead of logical_or of cmd and body_vel
+Removed rough environment and made total size smaller (12x8 -> 6x6) 
+46656485
+    Value function loss blows up and indicates overfitting, also tried running on robot after 2000 iterations and found it does not balance well
+
+Running a training with joint_pos penalty included
+46656489
+    The value function blows up after some time, indicating overfitting due to many episodes in the training 
+
+I think it is overfitting, so reducing episodes 8000 -> 1600
+Changed termination condition for out of bounds to (4 -> 8)
+46656998
+    Value loss blew up again
+    Putting one of these policies on the robot shows that when the init position is reached, it just cannot balance itself
+    Need to correct init position 
+
+Changed init position for frontal hip to be outward facing so robot can stand properly
+    Value function loss became huge again
+
+Reverted the rewards back to when it was working on 1/3/25
+Running training with old huskyb USD file without propellers 
+46661509
+    Not learnt all commands, and orientation is leaning forward 
+
+Running same training with new Huskyb USD with propellers 
+46661377
+    Not learnt all commands, and orientation is leaning forward 
+
+Increase air time 0.3 -> 0.5, so robot can take longer steps 
+46661562
+    Not learnt all commands, and orientation is leaning forward 
+    DOes that weird thign where it doesn't do air time equally between both feet
+
+Reverted air time mode 0.5 -> 0.3 
+46665969
+    Died to large actions, why? idk 
+
+Running same training with more episodes (1600 -> 4000)
+46665980
+    Died after 1600 episodes, but 1500 of them were really good and got really good reward 
+    All commands can be executed, it can balance really well, and gait looks good 
+    On physical robot, it balances its own weight but still wobbles a lot and is still unstable 
+    Cannot move it's legs up and turn 
+
+Changed noise params in observation vector to be more realistic to physical robot 
+Added torque event to base (-0.5, 0.5)
+Changed stiffness and damping (25.0 -> 17.5), (0.75 -> 0.6)
+46667543
+    Only trained 1850 iterations, and init trotting position is a little wrogn, but it can execute all commands 
+    Too wobbly in physical robot, but can see it turn 
+
+Running same training without RTX for faster training 
+46667554
+    Blew up physx on spawn, don't know why 
+
+2/14/25:
+
+Reduced stiffness gain on joints (17.5 -> 15.0) 
+Running without RTX for fast training 
+46674643
+    Destabilized after 3000 iterations 
+    Robot wobbles way too much for anything to be stable 
+
+Running same training for less iterations, maybe it will not blow up 
+46675697
+    Same thing 
+    Too wobbly on physical robot 
+
+Reduced damping 0.6 -> 0.5 
+46675701
+    Completed training, reward looks good 
+    Did something very weird on robot where it just went into a position and killed serial comms 
+
+Revert stiffness and damping 15 -> 17.5, 0.5 -> 0.6 and run for 1600 iterations 
+46675703
+    DId a little worse than the previous training, but still completed training
+    Was too janky 
+    
+Seems the robot joints are moving too fast for robot to actually move
+Set velocity limits on actuator config 3.5
+Increase foot clearance threshold 0.1 -> 0.2
+Reduced damping 0.6 -> 0.5
+Changed to implicit actuator 
+Reduced stiffness of joint to 8, damping to 0.5 (these servos are weaker and there is more wobble)
+Added domain randomization for the gains back (hopefully it works)
+Reverted commands and action scale back to 0.2 and (-2.0, 2.0)
+46681069
+    Loss function value got big at times, but not too big 
+    Trained to completion, and got good reward from looking at the output file
+    Simulation shows poor gait and balancing  
+
+Maybe if the robot took longer steps it can make the clearance? 
+CHanged weight of foot clearance 0.5 -> 3.0 
+Reduced weight of air time 5.0 -> 3.0
+INcreased mode time of air time 0.3 -> 0.8
+    Not doing well in training, so won't work anyways 
+    Died early 
+
+Removed foot clearance reward 
+Changed air time reward to isaac lab's version, not Spot's 
+Changed init positions so robot is lower to ground 
+Increased velocity threshold on actuator 3.5 -> 5.0
+Increase damping 0.5 -> 0.6
+46682973
+    Died to large action, and feet air time reward is negative throughout, so foot is never going in the air 
+
+Adding back foot clearance reward with this to see if any changes (weight 0.5, target 0.2)
+Reduced noise level on joint positions as they are really good in real world 
+Increase error from nosie on joint velocities 
+Changed to DC motor config and removed domain randomization for the gains 
+46689833
+
+2/17/25:
+
+Changed init joint positions to new value, maybe it will be more stable in this position? 
+Increase gait period time (0.3 -> 0.6)
+Some other minor changes and code cleanups 
+46764541
+    It is not balancing the air time, leading to very bad gait 
+    Getting stuck in that position where 2 legs have all the air time and 2 legs have all the contact time 
+
+Set retain_acceleration=True in RigidBodyPropertiesCfg(), this way forces are applied over multiple time steps (more realistic)
+46764542
+    Died too early
+    I guess retain acceleration messes with the action smoothness, leading to destabilization
+
+Changed foot clearance target 0.2 -> 0.1
+Changed gait period 0.6 -> 0.5
+Changed gait period reward to have equal air and contact time for each foot 
+46769862
+    Did not work well at all, the gait period reward was 0.0, so this is not a good reward 
+
+2/19/25:
+
+Increased stiffness to 10.0 (previously 8.0)
+Changed to new init positions so the robot is more stable and close to the ground 
+    Trained really well from videos, and is standing still when no command is given 
+    Physical robot does not do so well, it is too fast and causing massive wobble and cannot balance 
+
+Redoing the same training with Gaussian noise on observations 
+46800378
+    Robot is not walking as well, so maybe the std is too big 
+
+2/20/25:
+
+Reducing noise model std 0.25 -> 0.2, and 1.5 -> 1.0 
+Changed acceleration penalty 1e-4 -> 5e-3 to slow down the joints of the robot, making smoother motions 
+46838094
+    Robot does not work in sim, but on physical robot, it is now trotting its legs, just 2 legs are not on the ground and it cannot balance 
+    Also noticing a lot of lag from the sensor observations in physical system, which is not accurately modelled in sim 
+
+Increased damping 0.5 -> 0.85
+46848824
+    Had large value loss because maybe the joints are not moving fast enough 
+
+Added rough terrain into the training 
+46849621
+    Died too early, don't know why 
+
+2/21/25:
+
+Removed domain randomization for joint positions and velocities (causing instability, and real robot only spawns with same init positions every time for now)
+Reduced domain randomization for base spawn 
+Reduced air time mode time 0.5 -> 0.4
+Added domain randomization back for stiffness and damping at an interval of 90-120 seconds 
+46853840
+    Completed training, looks really good in rewards. Needs simulation 
+    Simulation showed the gait is not great
+    Physical test shows only 2 joints are moving the other two are not 
+    It goes to a different position than that of the init position, maybe it is not able to control properly with the init pos?
+
+Made actuator gain domain randomization at startup rather than at an interval 
+46853871
+    Blew up value function loss and died early 
+
+Removed actuator gain domain randomization
+46854408
+    Died too early 
+
+Reduced observation vector noise std to match logged data from the physical robot (seems the error is not as much as I thought)
+Reduced air time mode time 0.4 -> 0.3 (should be enough for robot to trot match for real world)
+46864780
+    Died too soon, I believe the joint stiffness may be an issue (paired with damping)
+
+Increase joint stiffness 10 -> 12.5
+Reduced rigid body linear and angular damping 0.5 -> 0.3 (robot will slow down less when applied a force)
+46866906
+    Died too soon again 
+
+Increase observation vector noise stds 
+46868614
+    Died too early 
+
+Added base height penalty 
+Changed reward weights to be same as stairs and waves (gait is not super important now)
+Removed air time variance penalty 
+46868864
+    Does not look too good, this reward structure does not work for flat terrain 
+    Large value function loss 
+
+2/22/25:
+
+Set observation std according to data acquired from tests 
+Changed back to DelayedPDActuatorCfg to model delay in movement (communication latency) 
+Reverted back the reward weighting 
+Set the order of commanding the joints correctly without regex 
+46873891
+    Died too early 
+
+2/23/25:
+
+Increased joint stiffness 10.0 -> 15.0 
+Increase joint damping 0.5 -> 0.6 
+Reduced gait reward weight 10 -> 4
+Increased velocity tracking rewards 5.0 -> 7.5 (lin) and 5.0 -> 6.5 (ang) 
+46906820
+    Large value function loss but completed training 
+
+Reverted reward weights to match Spot 
+Decreased velocity threshold 0.15 -> 0.1
+46916380
+    Large value function loss 
+
+Reverted back to January when I trained 1 policy that was good at 500 Hz. Just going back to basics and coming back from there 
+46927259
+    Large value function loss and large actions died too early 
+
+2/25/25:
+
+Started clean slate and got training going from 500 Hz working in sim 
+Reduced down to 250 Hz
+Reduced joint stiffness
+Reduced down to 200 Hz 
+
+Increase action smoothness penalty (-1 -> -2)
+46986808
+    Robot seems to move a little slower, but the body is still too stiff, may be an issue on real robot. 
+
+2/26/25:
+
+Reduced stiffness (15 -> 12.5), want to make the robot more compliant and also move slower 
+46991832
+    Works well in sim, needs testing 
+
+Running with RTX on (finally got T4 access)
+46992256
+    Works well in sim, needs testing 
+
+CHanged joint pos penalty to be based off velocity threshold and not take in body_vel into account when generating rewards 
+Increased foot clearance height 0.1 -> 0.15
+47000835
+    Can see the robot is now taking longer steps in training 
+    But pitches forward in sim
+
+Increased robot height by setting new init positions 
+47007750
+    It pitches forward in sim, possibly due to the point mass of the propellers
+
+2/27/25:
+
+Using huskyb without propellers, set the new init positions 
+47013731
+    Walks fine, but drifts back when no command is given and is trotting in place 
+
+Using full huskyb, set new init positions, and increased knee joint stiffness to take on the excess weight
+47013777
+    Pitches forward, need to fix that behavior. Maybe init positions are not good for this 
+
+Run new training with increased air time, so gait is slower (don't think this will work) (0.3 -> 0.5)
+47028038
+    Old init positions are too low, the robot gait is not looking good at all 
+
+Switched back to huskyb without propellers 
+Switched to new init position that keeps robot base higher 
+Decreased foot clearance threshold 0.15 -> 0.125
+47032715
+    Robot is switching between legs and learning to do gait slower while walking 
+    Stand still command envs are still moving back 
+
+Seems like robot is not able to learn stand still properly, so increased standing envs from 10% to 25%
+47035622
+    Robot gait is still really bad, its because the air and contact are too high which makes it unstable 
+    Need to have air time be a specific number and contact time be another (with longer contact time than air time) 
+
+2/28/25:
+
+Try one more: decrease gait period 0.5 -> 0.4
+Increase noise bounds on observation vector 
+Reduced num episodes (8000 -> 4000)
+Increase KLD 0.01 -> 0.04 so policy updates to optimal faster 
+47044065
+    Died too soon (need to reduce KLD)
+
+CHanged rewards to have separate air and contact time reward, since we want to make the times different 
+Gait reward reflects this, and explicit async reward is now implicit and not included 
+Trying with same air and contact time to see if anything is drastically different 
+Reduced KLD 0.01 and reverted episodes 8000
+47045450
+    Trots well and matches velocity, but it looks like real robot will have a problem matching that 
+    Robot also stands in place, but it keeps bouncing up and down, so might be unstable in sim and real world tests 
+
+3/1/25:
+
+Reduced P gains for all actuators by 2.5 
+Reduced max effort limit for hip joints 10.6 -> 9.6 to match real joint limits 
+Reduced velocity limits for all actuators 1.25 -> 1.0
+Increase contact time 0.3 -> 0.5
+47058358
+    Seems like legs cannot move well, maybe max velocity is too little or gains are too low? 
+
+Reverted back velocity limits on joints 
+47067189
+    Robot is not able to walk fast, opnly slow
+
+Reverted back the gain reduction 
+47070209
+    Same thing 
+
+3/2/25:
+
+Set contact time and air time to be the same 
+Set stiffness gains to be 2.5 lower 
+Set velocity limits to 1.0 to match real robot capability 
+47078495
+    Robot is not walking now, so it could be either gains or speed 
+
+Set velocity limit to 1.15
+47082493
+    Same thing 
+
+Removed gait reward conflict on sync feet
+47082942
+    Same thing 
+
+Reverted joint velocity 1.25 
+47077711
+    Same thing 
+
+3/3/25:
+
+Revert gains back to higher value 
+47096124
+    So it seems like that's not the issue, the gait is now matching air and contact times of the feet, which is more important than
+    matching the air and contact times
+
+Making weight of air and contact time the same as gait (5->10)
+47100893
+    Just hopping around now 
+
+Reverted back to 2/28 when I got it working wrongly 
+47110221
+    It's working and robots are trotting in training video 
+    The robots standing still bounce in place, maybe due to air and contact time reward 
+
+3/4/25:
+
+Removed air and contact time reward 
+47125213
+    The missing rewards cause the behavior to be the same as before, when it wasn't ok 
+
+3/5/25:
+
+Added a mask to air and contact time reward so reward is only given for feet in air or in contact respectively 
+47162958
+    Does not learnt o walk well 
+
+3/6/25:
+
+Changed gait so cmd > threshold gives sync reward and less than gives stance reward 
+Removed mask from air and contact time rewards 
+47198779
+    Something really messed up the commands themselves are not showing anymore
+
+3/8/25:
+
+Reverted back to last checkpoint commit 
+Changed air and contact time 0.3 -> 0.35
+47207372
+    Looks good, trots well, but bounces when standing still 
+
+3/9/25:
+
+Made joint position penalty return penalty all times, no stand still scaling (need robot to trot in place)
+47244429
+    Still doing the same thing, I think it is trying to trot, but the gait switches to stance reward 
+
+3/10/25:
+
+Gait returns sync reward at all times, regardless of movement or not 
+47258358
+    Trots in place, but wobbles side to side a lot, might be a problem on robot 
+
+3/12/25:
+
+Doing the same thing but with new init position, maybe it will trot well? 
+47291590
+    Trots in place, no wobble. But the movement has a bounce in the step which I think the real robot cannot match 
+
+Reduce the stiffness of the joints to 8.5, 10.5
+Reduce joint pos penalty weight -0.7 -> -0.5
+Increase foot clearance 0.1 -> 0.15
+47308020
+
+3/13/25:
+
+Changed init positions so robot is higher
+Changed velocity for commands to be -1 to 1 for all components (robots will move slower and more stable)
+47312864
+
+3/15/24:
+
+Changed URDF inertia matrices and running new training with that 
+47340181
+    It walks well, but standing gait is not good 
+    Maybe joint positions are too high? 
+
+3/24/25:
+
+Updated USD with new inertias after debugging (more accurate)
+Chnaged commands to be original values 
+Decreased air and contact time to be 0.33 seconds (0.35 seconds before)
+Increased joint gains (8.5 -> 12.5, 10.5 -> 15.5)
+47513304
+    Robot is still finding it hard to move fast, maybe joints are being limited in some way? 
+
+3/25/25:
+
+Increased stiffness of joints to 25.0 for all 
+Removed velocity limit on joint 
+47528919
+    Robot still not walking 
+
+3/26/25:
+
+Reduced stiffness to 12.5 and 17.5
+Reduced torques and acclerations penalties for joints by order of 10 
+47551631
+    Robot is now moving, but not great. Maybe inertia of the body is too much, so might need some tweaking 
+
+3/27/25:
+
+Reduced torques penalty 5e-5 -> 1e-5 
+Changed all inertias with more granularity to the URDF, USD reflects it perfectly 
+Reduced actuator damping 0.75 -> 0.6
+Increased action scale 0.2 -> 0.5
+47618922
+    Barely runs any iterations, due to the increased granularity causes way more computational overhead 
+
+3/28/25:
+
+Changed URDF and USD again to have simplfied inertia boxes back when it was partially walking 3/26/25
+Reverted air and contact time (0.33 -> 0.35)
+INcrease air and contact time reward (5 -> 8)
+47635846
+    Not moving well enough
+
+Increased stiffness of joints to 25.0
+Removed a velocity limit
+Torque limit for hip joints increased (9.6 -> 10.6)
+Action scale increased 0.2 -> 0.5
+47637429
+    Robot is moving again, but motion is way too jerky
+
+3/29/25:
+
+Added a velocity limit again of 1.25 rads/s
+47645824
+    Robots are not moving so far 
+    Started moving but the legs are sprawled out too much now, really bad movement 
+
+Removed velocity limit
+Reduced stiffness 25.0 -> 17.5
+47651005
+    Robots are moving much smoother now, but legs are sprawled out and dynamic trotting is bad 
+
+3/30/25:
+
+Reduced stiffness 17.5 -> 15.0
+47661188
+    Robot motion is even smoother now, legs are not sprawled out 
+    Air and contact time are terrible in log 
+
+3/31/25:
+
+Changed gait reward to always give sync reward, so robot will trot all the time 
+47685649
+    Robot reward is 200+, but the loss function value is also really large 
+    Gait looks good, but standing still causes the bad reward as robots are not sure what to do
+    Not moving great, also the video length and viewer is changed, how? 
+
+4/3/25:
+
+Revert gait reward to be relative to each foot rather than a specified air/contact time 
+47789959
+    Legs are sprawled out, gait is not good 
+    Not all commands are also learnt
+
+Reverted back to when the robots were moving, but reduced air and contact times 0.35 -> 0.3 
+Reduced episodes 8000 -> 3000
+Changed inertia for lower leg links in URDF, maybe it was too unrealistic for movement? 
+47848996
+    Still not good, needs real revamping 
+
+4/17/25:
+
+Used trimesh python library to compute inertia accurately as possible (verified with unitree go2, is close enough)
+Running flat terrain with this configuration 
+48288521
+    Commands work well in sim, and moves stably
+    Gait period is too quick, need to slow that down 
+
+Adding a velocity limit of 2 rads/s to see if joints will slow down, might be going too aggressively 
+48304539
+    Still the same reward accumulated, joints are moving too fast 
+
+Running stairs and waves with A2C setup
+48309786
+    Robot does not advance the curriculum (probably not able to meet air time to walk forward?)
+
+Flat terrain: reduced action scale 0.5 -> 0.3 
+Reduced velocity limit 2.0 -> 1.5
+48308712
+    Still the same behavior
+    Without the joint penalty for standing still, the robot assume a weird position
+
+Increased torque penalty 1e-5 -> 5e-4 
+Reduced action scale 0.3 -> 0.2 
+Increased air and contact time weight 5.0 -> 6.5
+Reduced velocity limit 1.5 -> 1.25
+Increased noise bounds in observations 
+Change joint position penalty to just be for hips, not knees 
+48318602
+    No change 
+
+Using unitree reward structure for policy that worked on robot 
+Increased noise bounds in observations even more 
+Action scale 0.2 -> 0.25 
+48328596
+48328659
+    Base height penalty was set wrong, messed everything up oops 
+
+4/22/25:
+
+Set base heigh penalty goal to be 0.59 (previously 0.3)
+Added lower leg components from Husky to make robot model as realistic as possible (with correct inertias)
+Added A2C for training, with actor having noise and critic being perfect to give best value estimates for actions taken 
+Increase velocity limits for the joints, so robot is able to clear the gait cycle in given time
+48423679
+    Knees go crazy when walking 
+    Air and contact time still not fixed 
+
+Set gait to always return sync reward, not stance 
+Set joint position penalty to always return just difference without a scale 
+Adding knees for joint position penalty too 
+48427230
+    Robot motion is responsive to all command inputs 
+    Seems to meet air time for trotting in place and moving, but reward did not show that 
+    In smooth and stable in sim, needs physical robot testing 
+
+Changed gait to be syncing just feet, not matching to air time
+Removed contact time reward
+Changed air time reward to have stand still reward 
+Increased velocity limit (2.5, 3.0 -> 5.0, 5.0)
+48429952
+    Robot is standing now, but the back legs are too flared out 
+    Gait is more galloping than trotting
+
+5/5/25:
+
+Revert back to 48427230, need to see it one more time 
+Decimation is still at 2 (not 4)
+48611157
+    It's doing the same behavior observed before, with the legs flaring out 
+    In fact it is more flared out now than before
+
+5/6/25:
+
+Policy learns to flare out legs to move them slower and increase air and contact time, so need to stop that 
+Decimation 2 -> 4
+Stiffness 25 -> 20
+48622040
+    In training videos, robots look like the back legs are good now (not flared out)
+    Simulation is stable, but the back legs are still flared out
+    It is also really bouncy, which is not what happens in the real robot. Maybe inertia issue again? 
+
+5/7/25: 
+
+Corrected inertia matrices on robot to IsaacSim conventions
+Broke joint pos penalty for each type of joint (allows more control over which joints should move more freely than others)
+    HF: -1.25
+    HS: -1.0
+    K: -0.6
+Removed contact time reward 
+Increase stiffness 20 -> 25
+48634942
+    The leg is barely lifting off the ground and the air time is too low, leading to super fast gait 
+    It is also bouncy when it trots, which is not what will happen on the real robot 
+
+5/8/25:
+
+Reduced joint pos penalties for all joints 
+    HF: -1.0 
+    HS: -0.7 
+    K: -0.5 
+Increased foot clearance target 0.1 -> 0.15 
+    Gait is still too fast, but the legs are looking good and the movement is good 
+
+5/9/25:
+
+Reduce joint velocity limit 5.0 -> 2.0 
+Reduced joint pos penalties for all joints 
+    HF: -0.8
+    HS: -0.3 
+    K: -0.3
+48665981
+    Robot motion is still restricted, and gait is still too fast 
+
+Increased air time reward weight 5.0 -> 10.0 
+Gait now focus on synchronizing the two feet, not to goal time 
+486666799
+    Legs are moving more, but joints are too fast still 
+    Also some flaring of the legs detected
+
+5/10/25:
+
+Reduce joint veocity limit 2.0 -> 1.25 
+Revert hf joint pos penalty -0.8 -> -1.0
+Reduce effort limit of hips to true value 10.6 -> 9.6
+48675494
+    Legs are moving too fast again 
+
+Reduce air time reward back to 5.0
+48675501
+    Legs look good, seem to be moving further away from defaults, but still looks like it is too fast 
+
+Reduce velocity limit 1.25 -> 1.0 
+Increase damping 0.75 -> 0.85
+Increase foot clearance reward weight 0.5 -> 5.0
+Increase air time reward weight 5.0 -> 10.0
+48681817
+    Now the legs are crazy falred out again, for previously listed reasons 
+
+Revert back to 48675501 
+48685858
+    Same behavior, gait too fast 
+
+Change gait to match goal air and contact times 
+Include contact time reward again 
+48685892
+    Now the gait appears to be slower, need to get plots to verify that it is actually slower period 
+
+Remove A2C setup 
+48685894
+    Same behavior as previous training, so A2C setup is not needed for this task (proven)
+    Needs hardware testing 
+
+Moving onto stairs and waves environment. Starting a training using Janurary's configuration 
+48694223
+    Looks like the robot legs are just sprawled out and cannot move, maybe action scale is too high? 
+
+5/12/25:
+
+Reduce action scale 0.5 -> 0.25
+48698161
+    Curriculum is working, but the gait looks more like galloping like back in January 
+    Stairs and boxes env is not progressed all the way either, only halfway 
+
+Set contact processing to True on env cfg, so we actually get back contact sensor data 
+Reduce foot clearance threshold 0.25 -> 0.15, so it is meaninful and achieveable 
+48707591
+    Robots do not move at all 
+
+5/13/25:
+
+Set contact processing to False on env cfg
+Gait synchronizes feet instead of to goal time
+48712703
+    Same thing, the legs are way too sprawled out 
+    But the robots are showing more movement than the previous. It just seems like the legs are too sprawled out
+
+Copying in joint pos penalties from flat env cfg 
+    HF: -1.0
+    HS: -0.2
+    K: -0.2
+48724743
+    Robots are advancing the curriculum again, but the legs are too wide apart 
+    But it is following a trotting motion 
+
+Adding noise into the critic observations 
+Changed viewer POV 
+48728701
+    Curriculum being advanced, but the legs are too wide apart still
+    Not able to advance all the boxes and stairs environments 
+
+5/14/25:
+
+Train flat terrain again with reduced noise models (real world sensors have a lot less gaussian noise)
+Gait reward now gives different reward for terrain type (flat, stairs_waves)
+48740207
+    Walking looks good, and also works with gaussian noise with good fidelity 
+
+Reduce weight of air and contact time 5.0 -> 2.5 
+48756286
+    Same behavior, legs are too wide and it doesn't advance the curriculum for boxes and stairs/waves
+
+Using LSTM A2C setup for this environment, to encode memory and better value estimates (priviliged info)
+Reduce weight of lin vel tracking 10.0 -> 3.0 
+Reduce weight of ang vel tracking 10.0 -> 2.5
+48762193
+    Robots do not move, but it does complete training, so something is being learnt 
+    Maybe low velocity tracking weight causes it to just ignore entirely? 
+
+5/17/25:
+
+Increase velocity tracking weight 3.0 -> 5.0 
+48778761
+    Same thing, looks like RNN approach is taking too long (it did not complete all 3000 episodes)
+
+5/22/25:
+
+Full revert back to checkpoint, removed all aerial policy stuff 
+48847884
+
+5/27/25:
+
+Trying out stairs and waves on newest isaacsim version 
+328295
+    Conda error 
+
+Fixed conda related errors, retrying 
+334308
+    Isaaclab repo needs to be updated 
+
+5/28/25:
+
+Fixed Isaaclab repo, retrying 
+353831
+    Forces applied to props are not stable, causes robot to just fall and tilt like crazy 
+
+5/29/25:
+
+Copied quadcopter design from official IsaacLab repo 
+Removed joint level observations as this is only a flight policy 
+    Robots are actually flying, but the agent does not learn to stablizie itself with the torques 
+
+6/3/25:
+
+Zero out all commands
+Updated RSL RL parameters (model complexity, num epochs)
+    Robots are still moving very fast, even though they should be hovering only 
+    I think the policy doesn't have a termination condition for early actions being bad, so it causes the large loss 
+
+6/8/25:
+
+Tried a bunch of changes, including from QuadcopterEnv
+    Nothing seems to work, robot is still just rotating into an unrecoverable orientation and terminating 
+    Maybe inertia distribution is just not good for the flight control?> 
+
+Thrust clamped -1.0, 1.0
+Moments clamped at -pi, pi 
+Added new penalties and termination for uncrecoverable orientation 
+    Still the same 
+
+Ok so NVIDIA didn't even complete the 3D pose comand function, and they also generate the command in base frame, 
+but they do not update it, causing the robot to never reach the goal pose. Massive issue. The 2D pose command is written, 
+so the 3D one needs finishing. Need to do it later. TODO
+
+6/21/25:
+
+Trying with 2d pose command with base forces action config and using quadcopter rewards 
+    It is still commanding too much roll and pitch 
+
+Reduced network complexity to [256, 128]
+Reduced init noise std 1.0 -> 0.5 
+Reduce entropy coef 0.01 -> 0.005 
+Add living reward, orientation tracking reward, and base orientation level penalty 
+Reduced weight of distance tracking reward 15.0 -> 3.0 
+Increase std of distance tracking 0.8 -> 2.0 so it is more forgiving 
+Added simple heading 
+    Still commanding too much pitch, causing termination. It seems like the agent doesn't want to control the pitch to a small value 
+
+6/29/25:
+
+Training with propeller velocities action 
+    It seems like it is not commanding any velocity at all, no propeller movement and just falls down 
+
+7/7/25:
+
+Training huskyb walk policy on the new IsaacLab using new script 
+901559
+    Basically the new code automatically merges fixed joints, which causes an issue for learning behaviors
+    Ankles now touch the ground when it should be just the feet, leading to suboptimal behaviors 
+
+Fixed the USD 
+906497
+    Training works well, and also work in simulation properly 
+
+7/20/25:
+
+Added power limited actuators and set armature and damping from dynamixel datasheet and ChatGPT 
+1085044
+    Robot is not able to move at all, so it looks like the stiffness is too low to support the new additions 
+
+7/21/25:
+
+Remove armature from joints (it is negligible for these servos)
+Set kp 60 and kd 1.0 
+Set saturation to be 0.9
+1101176
+    Same 
+
+7/24/25:
+
+Removed power limit also 
+Set to spot rewards and added some more DR 
+Increase velocity command inputs 
+Increase stiffness and damping of joints 
+Reduce epochs 3k -> 1.5k 
+1187514
+    Stands under no command, and trots pretty nicely 
+    Legs seem to be a little too constrained, so need to reduce stiffness and damping a little more
+
+Reduce stiffness and damping of joints 
+1201419
+    Stands in place, looks good in sim, behaves just like Spot does 
+
+Adding in dynamic trotting rewards separately, so we can choose which type of movement we want 
+Change back RSL RL params for dynamic trotting to work 
+1211702
+    Also works in sim
+
+7/28/25:
+
+Added in armature and friction values from datasheet 
+1256308
+    Not working, I think abandon this 
+
+Setting torque randomization for output (0.6, 1.0)
+1291307
+    Looks good still 
+
+8/1/25:
+
+Retraining with corruption enabled for actor and noiseless critic 
+Using stance reward structure
+1312479
+    Looks like the gait is still good, but stance position is not 
+
+Same thing with dynamic trotting rewards
+1312474
+    Looks very bouncy
+
+8/3/25:
+
+Adding power penalty -1.0 
+Remove joint vel and acc penalty 
+1335652
+    Works nicely, responds to all commands
+
+11/17/25:
+
+Pilot training of DTC moves to foot targets, but does not move body and trot 
+No contact schedule respected, so added air time reward 
+Reduced weight of foot tracking and joint tracking 
+Reduce tracking velocity (-1.0, 1.0) -> (-0.5, 0.5)
+    Still doing the same thing of stretching out and being unable to move 
+
+The desired joint positions could be causing this (switch to update every tick) 
