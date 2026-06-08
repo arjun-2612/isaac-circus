@@ -2,9 +2,7 @@
 This repository contains the following IsaacLab simulation files for robots from my learning based control work in graduate school:
 
 ## Authors
-Arjun Viswanathan \
-Henry Noyes \
-Chenghao Wang 
+Arjun Viswanathan 
 
 # Important Things to Know
 These are the core rules to follow with this repository. The git tree or the installs will most likely break if you do not follow these rules, and it will be a headache to restore it back. So please, take the time to read this section. This section will be expanded as more Do's and Don'ts are encountered. 
