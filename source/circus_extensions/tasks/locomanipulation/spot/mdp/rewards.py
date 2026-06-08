@@ -125,7 +125,7 @@ def ee_follow_through_reward(
     ee_vel_w = asset.data.body_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
 
     swing_dir = -cmd.interception_vel.clone()
-    swing_dir[:, 2] = swing_dir[:, 2] + 2.0
+    swing_dir[:, 2] = swing_dir[:, 2] + 1.0
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
     # Signed projection — only positive (forward) motion is rewarded.
