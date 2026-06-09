@@ -53,19 +53,12 @@ def ee_approach_reward(
     env: ManagerBasedRLEnv, 
     ee_frame_cfg: SceneEntityCfg = SceneEntityCfg("ee_frame"),
     std: float = 0.5, 
-    hand_off: float = 0.3,
 ) -> torch.Tensor:
     ee_frame = env.scene[ee_frame_cfg.name]
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
     pos_error = torch.norm(cmd.interception_pos - ee_frame.data.target_pos_w.squeeze(1), dim=-1)
-    reward = torch.exp(-pos_error / std)
-
-    # Linearly fade out approach reward in the last `hand_off` seconds so the
-    # swing rewards take over and the policy isn't punished for moving past p*.
-    fade = torch.clamp(cmd.time_to_intercept / hand_off, 0.0, 1.0)
-    has_targets = (cmd.targets_remaining > 0).float()
-    return reward * fade * has_targets
+    return torch.exp(-pos_error / std)
 
 
 def ee_velocity_tracking_reward(
