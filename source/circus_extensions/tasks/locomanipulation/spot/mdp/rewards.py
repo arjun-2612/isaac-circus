@@ -69,21 +69,29 @@ def ee_velocity_tracking_reward(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     swing_speed: float = 8.0, 
     half_width: float = 0.15,
+    perp_std: float = 3.0,
 ) -> torch.Tensor:
     asset = env.scene[asset_cfg.name]
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
     ee_vel_w = asset.data.body_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
 
+    # Desired swing direction: oppose the incoming shuttle (XZ only) with an upward bias.
     swing_dir = -cmd.interception_vel.clone()
     swing_dir[:, 2] = swing_dir[:, 2] + 1.0
-    swing_dir[:, 1] = 0.0  # Don't care about lateral direction for now
+    swing_dir[:, 1] = 0.0  # keep the swing in the forward (sagittal) plane
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
-    # Signed projection — only positive (forward) motion is rewarded.
+    # Speed along the swing direction -- only forward motion is rewarded.
     speed_along = torch.sum(ee_vel_w * swing_dir, dim=-1)
-    reward = torch.clamp(speed_along / swing_speed, 0.0, 1.0)
+    forward = torch.clamp(speed_along / swing_speed, 0.0, 1.0)
 
+    # Off-axis (perpendicular) speed -- penalize so the racket doesn't sweep sideways.
+    perp_vec = ee_vel_w - speed_along.unsqueeze(-1) * swing_dir
+    perp_speed = torch.norm(perp_vec, dim=-1)
+    align = torch.exp(-(perp_speed ** 2) / (perp_std ** 2))
+
+    reward = forward * align
     return reward * _swing_window(cmd.time_since_intercept, half_width)
 
 
@@ -96,13 +104,16 @@ def ee_orientation_tracking_reward(
     asset = env.scene[asset_cfg.name]
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
+    # Racket face normal is the LOCAL -Z axis -> rotate [0,0,-1] into world.
     ee_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids, :].squeeze(1)
-    local_normal = torch.tensor([0.0, 0.0, 1.0], device=env.device).expand(env.num_envs, 3)
+    local_normal = torch.tensor([0.0, 0.0, -1.0], device=env.device).expand(env.num_envs, 3)
     ee_normal_w = math_utils.quat_rotate(ee_quat_w, local_normal)
 
+    # Face should point where the racket pushes the shuttle: forward (+X) and up --
+    # i.e. the same world direction as the swing.
     target_normal = -cmd.interception_vel.clone()
-    target_normal[:, 2] = -torch.abs(target_normal[:, 2]) - 0.5
-    target_normal[:, 1] = 0.0  # Don't care about lateral direction for now
+    target_normal[:, 2] = torch.abs(target_normal[:, 2]) + 0.5
+    target_normal[:, 1] = 0.0
     target_normal = target_normal / (torch.norm(target_normal, dim=-1, keepdim=True) + 1e-6)
 
     cos_dist = 1.0 - torch.sum(ee_normal_w * target_normal, dim=-1)
@@ -115,8 +126,10 @@ def ee_follow_through_reward(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     swing_speed: float = 8.0, 
     window: float = 0.2,
+    perp_std: float = 3.0,
 ) -> torch.Tensor:
-    """Reward racket speed along the swing direction for `window` s after impact."""
+    """Reward racket speed along the swing direction for `window` s after impact,
+    discounting any off-axis (sideways) motion."""
     asset = env.scene[asset_cfg.name]
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
@@ -124,16 +137,19 @@ def ee_follow_through_reward(
 
     swing_dir = -cmd.interception_vel.clone()
     swing_dir[:, 2] = swing_dir[:, 2] + 1.0
-    swing_dir[:, 1] = 0.0  # Don't care about lateral direction for now
+    swing_dir[:, 1] = 0.0
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
-    # Signed projection — only positive (forward) motion is rewarded.
     speed_along = torch.sum(ee_vel_w * swing_dir, dim=-1)
-    reward = torch.clamp(speed_along / swing_speed, -1.0, 1.0)
+    forward = torch.clamp(speed_along / swing_speed, -1.0, 1.0)
+
+    perp_vec = ee_vel_w - speed_along.unsqueeze(-1) * swing_dir
+    perp_speed = torch.norm(perp_vec, dim=-1)
+    align = torch.exp(-(perp_speed ** 2) / (perp_std ** 2))
 
     t = cmd.time_since_intercept
     in_window = (t > 0.0) & (t < window)
-    return reward * in_window.float()
+    return forward * align * in_window.float()
 
 
 def stand_still_reward(

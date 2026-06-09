@@ -326,7 +326,7 @@ class SpotBadmintonRewardsCfg:
     # -- task: approach and orientation
     ee_approach = RewardTermCfg(
         func=spot_mdp.ee_approach_reward,
-        weight=2.0,
+        weight=5.0,
         params={
             "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
             "std": 0.5, 
@@ -343,15 +343,16 @@ class SpotBadmintonRewardsCfg:
     )
 
     # -- task: swing and follow through
-    ee_velocity = RewardTermCfg(
-        func=spot_mdp.ee_velocity_tracking_reward,
-        weight=10.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 12.0, 
-            "half_width": 0.25,
-        },
-    )
+    # ee_velocity = RewardTermCfg(
+    #     func=spot_mdp.ee_velocity_tracking_reward,
+    #     weight=10.0,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
+    #         "swing_speed": 12.0, 
+    #         "half_width": 0.25,
+    #         "perp_std": 3.0,
+    #     },
+    # )
     # ee_follow_through = RewardTermCfg(
     #     func=spot_mdp.ee_follow_through_reward,
     #     weight=1.0,
@@ -359,6 +360,7 @@ class SpotBadmintonRewardsCfg:
     #         "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
     #         "swing_speed": 12.0, 
     #         "window": 0.2,
+    #         "perp_std": 3.0,
     #     },
     # )
 
