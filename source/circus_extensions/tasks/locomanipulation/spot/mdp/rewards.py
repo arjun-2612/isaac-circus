@@ -80,7 +80,8 @@ def ee_velocity_tracking_reward(
     ee_vel_w = asset.data.body_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
 
     swing_dir = -cmd.interception_vel.clone()
-    swing_dir[:, 2] = swing_dir[:, 2] + 2.0
+    swing_dir[:, 2] = swing_dir[:, 2] + 1.0
+    swing_dir[:, 1] = 0.0  # Don't care about lateral direction for now
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
     # Signed projection — only positive (forward) motion is rewarded.
@@ -105,6 +106,7 @@ def ee_orientation_tracking_reward(
 
     target_normal = -cmd.interception_vel.clone()
     target_normal[:, 2] = -torch.abs(target_normal[:, 2]) - 0.5
+    target_normal[:, 1] = 0.0  # Don't care about lateral direction for now
     target_normal = target_normal / (torch.norm(target_normal, dim=-1, keepdim=True) + 1e-6)
 
     cos_dist = 1.0 - torch.sum(ee_normal_w * target_normal, dim=-1)
@@ -126,6 +128,7 @@ def ee_follow_through_reward(
 
     swing_dir = -cmd.interception_vel.clone()
     swing_dir[:, 2] = swing_dir[:, 2] + 1.0
+    swing_dir[:, 1] = 0.0  # Don't care about lateral direction for now
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
     # Signed projection — only positive (forward) motion is rewarded.
