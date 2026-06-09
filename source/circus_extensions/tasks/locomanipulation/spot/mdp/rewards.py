@@ -58,7 +58,10 @@ def ee_approach_reward(
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
     pos_error = torch.norm(cmd.interception_pos - ee_frame.data.target_pos_w.squeeze(1), dim=-1)
-    return torch.exp(-pos_error / std)
+    reward = torch.exp(-pos_error / std)
+
+    has_targets = (cmd.targets_remaining > 0).float()
+    return reward * has_targets
 
 
 def ee_velocity_tracking_reward(
