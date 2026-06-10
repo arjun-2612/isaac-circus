@@ -55,4 +55,4 @@ def fallen_over(
     tilt = torch.acos(torch.clamp(-asset.data.projected_gravity_b[:, 2], -1.0, 1.0))
     too_tilted = tilt > limit_angle
     too_low = asset.data.root_pos_w[:, 2] < min_height
-    return too_tilted & too_low
+    return too_tilted #& too_low

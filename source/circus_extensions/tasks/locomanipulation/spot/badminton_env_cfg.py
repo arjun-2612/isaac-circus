@@ -338,7 +338,7 @@ class SpotBadmintonRewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
             "std": 0.3,
-            "half_width": 0.35, 
+            "half_width": 0.25, 
         },
     )
 
@@ -446,7 +446,7 @@ class SpotBadmintonTerminationsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "limit_angle": 1.2,
-            "min_height": 0.20,
+            "min_height": 0.35,
         },
     )
     terrain_out_of_bounds = DoneTerm(
@@ -454,14 +454,14 @@ class SpotBadmintonTerminationsCfg:
         params={"asset_cfg": SceneEntityCfg("robot")},
         time_out=True,
     )
-    # missed = DoneTerm(
-    #     func=spot_mdp.missed_shuttle,
-    #     params={
-    #         "command_name": "shuttle_launcher",
-    #         "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
-    #         "success_threshold": 0.2,      
-    #     },
-    # )
+    missed = DoneTerm(
+        func=spot_mdp.missed_shuttle,
+        params={
+            "command_name": "shuttle_launcher",
+            "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
+            "success_threshold": 0.3,      
+        },
+    )
 
 
 @configclass
