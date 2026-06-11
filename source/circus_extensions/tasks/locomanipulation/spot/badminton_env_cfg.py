@@ -353,16 +353,16 @@ class SpotBadmintonRewardsCfg:
             "perp_std": 3.0,
         },
     )
-    # ee_follow_through = RewardTermCfg(
-    #     func=spot_mdp.ee_follow_through_reward,
-    #     weight=1.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-    #         "swing_speed": 12.0, 
-    #         "window": 0.2,
-    #         "perp_std": 3.0,
-    #     },
-    # )
+    ee_follow_through = RewardTermCfg(
+        func=spot_mdp.ee_follow_through_reward,
+        weight=5.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
+            "swing_speed": 12.0, 
+            "window": 0.2,
+            "perp_std": 3.0,
+        },
+    )
 
     # -- auxiliary
     face_net = RewardTermCfg(
@@ -437,16 +437,11 @@ class SpotBadmintonTerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=spot_mdp.isaac.time_out, time_out=True)
-    # body_contact = DoneTerm(
-    #     func=spot_mdp.isaac.illegal_contact,
-    #     params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["base", ".*_hip", ".*_uleg"]), "threshold": 1.0},
-    # )
     tipped_over = DoneTerm(
         func=spot_mdp.fallen_over,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "limit_angle": 1.2,
-            "min_height": 0.35,
         },
     )
     terrain_out_of_bounds = DoneTerm(
@@ -454,14 +449,14 @@ class SpotBadmintonTerminationsCfg:
         params={"asset_cfg": SceneEntityCfg("robot")},
         time_out=True,
     )
-    missed = DoneTerm(
-        func=spot_mdp.missed_shuttle,
-        params={
-            "command_name": "shuttle_launcher",
-            "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
-            "success_threshold": 0.3,      
-        },
-    )
+    # missed = DoneTerm(
+    #     func=spot_mdp.missed_shuttle,
+    #     params={
+    #         "command_name": "shuttle_launcher",
+    #         "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
+    #         "success_threshold": 0.3,      
+    #     },
+    # )
 
 
 @configclass

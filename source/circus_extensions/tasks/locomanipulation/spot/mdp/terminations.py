@@ -47,12 +47,10 @@ def missed_shuttle(
 def fallen_over(
     env: ManagerBasedEnv,
     limit_angle: float = 1.0,
-    min_height: float = 0.20,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Terminate if the robot is fallen over, defined as having a tilt angle greater than `limit_angle` and a height less than `min_height`."""
+    """Terminate if the robot is fallen over, defined as having a tilt angle greater than `limit_angle`."""
     asset = env.scene[asset_cfg.name]
     tilt = torch.acos(torch.clamp(-asset.data.projected_gravity_b[:, 2], -1.0, 1.0))
     too_tilted = tilt > limit_angle
-    too_low = asset.data.root_pos_w[:, 2] < min_height
-    return too_tilted #& too_low
+    return too_tilted 
