@@ -353,16 +353,16 @@ class SpotBadmintonRewardsCfg:
             "perp_std": 3.0,
         },
     )
-    # ee_follow_through = RewardTermCfg(
-    #     func=spot_mdp.ee_follow_through_reward,
-    #     weight=5.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-    #         "swing_speed": 12.0, 
-    #         "window": 0.2,
-    #         "perp_std": 3.0,
-    #     },
-    # )
+    ee_follow_through = RewardTermCfg(
+        func=spot_mdp.ee_follow_through_reward,
+        weight=5.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
+            "swing_speed": 12.0, 
+            "window": 0.2,
+            "perp_std": 3.0,
+        },
+    )
 
     # -- auxiliary
     face_net = RewardTermCfg(
