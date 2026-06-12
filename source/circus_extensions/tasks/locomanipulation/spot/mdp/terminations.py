@@ -28,19 +28,14 @@ def missed_shuttle(
     command_name: str = "shuttle_launcher",
     success_threshold: float = 0.3,
 ) -> torch.Tensor:
-    """Terminate if the racket face is too far from the shuttle interception at intercept time."""
+    """Terminate if the shuttle is missed."""
     cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name) 
     ee_frame: FrameTransformer = env.scene[ee_frame_cfg.name]
 
     ee_pos_w = ee_frame.data.target_pos_w.squeeze(1)
     intercept_pos_w = cmd.current_intercept_pos_w
-    at_intercept_time = cmd.current_intercept_time < env.step_dt
 
-    missed = torch.where(
-        at_intercept_time,
-        torch.norm(intercept_pos_w - ee_pos_w, dim=-1) > success_threshold,
-        torch.zeros_like(at_intercept_time, dtype=torch.bool),
-    )
+    missed = cmd.at_intercept_time & (torch.norm(intercept_pos_w - ee_pos_w, dim=-1) > success_threshold)
     return missed
 
 

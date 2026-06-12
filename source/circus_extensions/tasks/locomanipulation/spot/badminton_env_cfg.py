@@ -349,20 +349,20 @@ class SpotBadmintonRewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
             "swing_speed": 12.0, 
-            "half_width": 0.25,
+            "half_width": 0.15,
             "perp_std": 3.0,
         },
     )
-    ee_follow_through = RewardTermCfg(
-        func=spot_mdp.ee_follow_through_reward,
-        weight=5.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 12.0, 
-            "window": 0.2,
-            "perp_std": 3.0,
-        },
-    )
+    # ee_follow_through = RewardTermCfg(
+    #     func=spot_mdp.ee_follow_through_reward,
+    #     weight=5.0,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
+    #         "swing_speed": 12.0, 
+    #         "window": 0.2,
+    #         "perp_std": 3.0,
+    #     },
+    # )
 
     # -- auxiliary
     face_net = RewardTermCfg(
@@ -449,14 +449,14 @@ class SpotBadmintonTerminationsCfg:
         params={"asset_cfg": SceneEntityCfg("robot")},
         time_out=True,
     )
-    # missed = DoneTerm(
-    #     func=spot_mdp.missed_shuttle,
-    #     params={
-    #         "command_name": "shuttle_launcher",
-    #         "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
-    #         "success_threshold": 0.3,      
-    #     },
-    # )
+    missed = DoneTerm(
+        func=spot_mdp.missed_shuttle,
+        params={
+            "command_name": "shuttle_launcher",
+            "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
+            "success_threshold": 0.2,      
+        },
+    )
 
 
 @configclass

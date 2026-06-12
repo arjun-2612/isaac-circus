@@ -37,6 +37,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.current_intercept_pos_w = torch.zeros((self.num_envs, 3), device=self.device)  # (E,3)
         self.current_intercept_vel_w = torch.zeros((self.num_envs, 3), device=self.device)  # (E,3)
         self.current_intercept_time = torch.zeros((self.num_envs,), device=self.device)  # (E,)
+        self.at_intercept = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device) # (E,)
         self.next_shuttle_pos_w = torch.zeros((self.num_envs, 3), device=self.device)  # (E,3)
 
         # Other variables
@@ -100,6 +101,11 @@ class ShuttleLauncherCommand(CommandTerm):
     def time_since_intercept(self) -> torch.Tensor:
         # negative pre-impact, 0 at impact, positive after
         return self.time_since_last_resample - self.planned_intercept_time
+    
+    @property
+    def at_intercept_time(self) -> torch.Tensor:
+        # True for exactly one step per target, at the interception instant.
+        return self.at_intercept
 
     """
     Command functions.
@@ -109,13 +115,9 @@ class ShuttleLauncherCommand(CommandTerm):
         racket_pos_w = self._env.scene[self.cfg.ee_frame.name].data.target_pos_w.clone().squeeze(1)  # (E,3)
         pos_error = torch.norm(racket_pos_w - self.current_intercept_pos_w, dim=-1)  # (E,)
 
-        near_zero = self.current_intercept_time < (self.dt * 2.0)
-        is_active = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        is_active[self.active_env_ids] = True
-        at_intercept_time = near_zero & is_active
-
-        if at_intercept_time.any():
-            env_ids = at_intercept_time.nonzero(as_tuple=False).squeeze(-1)
+        at_int_time = self.at_intercept_time
+        if at_int_time.any():
+            env_ids = at_int_time.nonzero(as_tuple=False).squeeze(-1)
             target_id = self.targets_generated[env_ids].long()
             self.success_buffer[env_ids, target_id] = (pos_error[env_ids] < self.cfg.success_threshold).float()
 
@@ -224,6 +226,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.current_intercept_vel_w[env_ids] = self.shuttle_interception_vel_w[env_ids, 0].clone()
         self.current_intercept_time[env_ids] = self.time_to_interception[env_ids, 0].squeeze(-1).clone()
         self.planned_intercept_time[env_ids] = self.current_intercept_time[env_ids].clone()
+        self.at_intercept[env_ids] = False
 
     def _update_command(self):
         mask = self.time_since_last_resample >= self.time_between_targets
@@ -258,9 +261,12 @@ class ShuttleLauncherCommand(CommandTerm):
         self.shuttle_vel_w[self.active_env_ids, 2] = (self.shuttle_vel_w[self.active_env_ids, 2] + (self.g/self.k[self.active_env_ids]))*self.exp_kdt[self.active_env_ids] - (self.g/self.k[self.active_env_ids])
 
         self.time_since_last_resample[self.active_env_ids] += self.dt
-        self.current_intercept_time[self.active_env_ids] = torch.clamp(
-            self.current_intercept_time[self.active_env_ids] - self.dt, min=0.0
-        )
+
+        before = self.current_intercept_time[self.active_env_ids]
+        after = torch.clamp(before - self.dt, min=0.0)
+
+        self.at_intercept[self.active_env_ids] = (before > 0.0) & (after <= 0.0)
+        self.current_intercept_time[self.active_env_ids] = after
 
     """
     Debug visualization.
