@@ -11,8 +11,8 @@ task:
   checkpoint: model_5400.pt
 
 play:
-  folder: 2025-09-11_14-36-14
-  checkpoint: model_3600.pt
+  folder: 2026-06-12_12-43-36
+  checkpoint: model_3400.pt
 
 sim:
   env_path: miniconda3/envs/isaac450/lib/python3.10/site-packages/isaacsim/exts/isaacsim.examples.interactive/isaacsim/examples/interactive/user_examples
@@ -23,9 +23,9 @@ convert:
   usd_out: robotarium/spot/usd/spot_badminton/spot_badminton.usd
 
 transfer:
-  source_path: /projects/siliconsynapselab/sslab_isaaclab/logs/rsl_rl/spot_rl
-  log_name: 2025-12-18_12-11-23
-  dest_path: logs/rsl_rl/spot_rl
+  source_path: /projects/siliconsynapselab/sslab_isaaclab/logs/rsl_rl/spot_badminton_rl
+  log_name: 2026-06-12_12-43-36
+  dest_path: logs/rsl_rl/spot_badminton_rl
 
 visuals:
   enable: true

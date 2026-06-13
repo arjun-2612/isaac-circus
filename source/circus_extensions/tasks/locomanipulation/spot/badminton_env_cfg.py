@@ -326,7 +326,7 @@ class SpotBadmintonRewardsCfg:
     # -- task: approach and orientation
     ee_approach = RewardTermCfg(
         func=spot_mdp.ee_approach_reward,
-        weight=2.0,
+        weight=5.0,
         params={
             "ee_frame_cfg": SceneEntityCfg("spot_badminton_ee"),
             "std": 0.5, 
@@ -348,7 +348,7 @@ class SpotBadmintonRewardsCfg:
         weight=10.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 12.0, 
+            "swing_speed": 5.0, 
             "half_width": 0.15,
             "perp_std": 3.0,
         },
@@ -358,7 +358,7 @@ class SpotBadmintonRewardsCfg:
         weight=5.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 12.0, 
+            "swing_speed": 5.0, 
             "window": 0.2,
             "perp_std": 3.0,
         },
@@ -472,6 +472,21 @@ class SpotBadmintonCurriculumCfg:
             "level_step": 0.1,
         }
     )
+
+    # swing_speed_ramp = CurrTerm(
+    #     func=spot_mdp.swing_speed_curriculum,
+    #     params={
+    #         "command_name": "shuttle_launcher",
+    #         "reward_term_names": ("ee_velocity", "ee_follow_through"),
+    #         "racket_body_name": "arm0_racket_face",
+    #         "init_swing_speed": 4.0,
+    #         "min_swing_speed": 4.0,
+    #         "max_swing_speed": 14.0,
+    #         "headroom": 1.25,
+    #         "ema_decay": 0.995,
+    #         "max_step_per_update": 0.02,
+    #     },
+    # )
 
 
 @configclass
