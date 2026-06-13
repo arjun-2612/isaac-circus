@@ -47,6 +47,9 @@ class ShuttleLauncherCommand(CommandTerm):
         self.total_targets = torch.full((self.num_envs,), cfg.num_targets, dtype=torch.int32, device=self.device)
         self.success_buffer = torch.zeros((self.num_envs, cfg.num_targets), device=self.device)
         self.level = torch.zeros((self.num_envs,), device=self.device)
+        self.swing_speed_target = torch.full((self.num_envs,), 4.0, device=self.device)
+        self.swing_speed_ema = torch.full((self.num_envs,), 4.0 / 1.25, device=self.device)
+        self.achieved_racket_speed = torch.zeros((self.num_envs,), device=self.device)
         self.planned_intercept_time = torch.zeros((self.num_envs,), device=self.device)
 
         # Constants
@@ -226,6 +229,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.current_intercept_vel_w[env_ids] = self.shuttle_interception_vel_w[env_ids, 0].clone()
         self.current_intercept_time[env_ids] = self.time_to_interception[env_ids, 0].squeeze(-1).clone()
         self.planned_intercept_time[env_ids] = self.current_intercept_time[env_ids].clone()
+        self.achieved_racket_speed[env_ids] = 0.0
         self.at_intercept[env_ids] = False
 
     def _update_command(self):
