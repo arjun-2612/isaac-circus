@@ -94,6 +94,7 @@ class SpotBadmintonCommandsCfg:
         intercept_height=1.5,
         num_targets=6,
         ee_frame=SceneEntityCfg("spot_badminton_ee"),
+        asset_cfg=SceneEntityCfg("robot", body_names="arm0_racket_face"),
         success_threshold=0.3,
     )
 
@@ -348,7 +349,6 @@ class SpotBadmintonRewardsCfg:
         weight=20.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 5.0, 
             "half_width": 0.15,
             "perp_std": 3.0,
         },
@@ -358,7 +358,6 @@ class SpotBadmintonRewardsCfg:
         weight=20.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
-            "swing_speed": 5.0, 
             "window": 0.2,
             "perp_std": 3.0,
         },
@@ -473,20 +472,17 @@ class SpotBadmintonCurriculumCfg:
         }
     )
 
-    # swing_speed_ramp = CurrTerm(
-    #     func=spot_mdp.swing_speed_curriculum,
-    #     params={
-    #         "command_name": "shuttle_launcher",
-    #         "reward_term_names": ("ee_velocity", "ee_follow_through"),
-    #         "racket_body_name": "arm0_racket_face",
-    #         "init_swing_speed": 4.0,
-    #         "min_swing_speed": 4.0,
-    #         "max_swing_speed": 14.0,
-    #         "headroom": 1.25,
-    #         "ema_decay": 0.995,
-    #         "max_step_per_update": 0.02,
-    #     },
-    # )
+    swing_speed_ramp = CurrTerm(
+        func=spot_mdp.swing_speed_curriculum,
+        params={
+            "command_name": "shuttle_launcher",
+            "min_swing_speed": 2.0,
+            "max_swing_speed": 14.0,
+            "headroom": 1.25,
+            "ema_decay": 0.995,
+            "max_step_per_update": 2.0,
+        },
+    )
 
 
 @configclass

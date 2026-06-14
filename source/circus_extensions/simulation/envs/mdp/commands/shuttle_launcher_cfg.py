@@ -32,6 +32,9 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     ee_frame: SceneEntityCfg = MISSING
     """Config for the end-effector frame used for metrics."""
 
+    asset_cfg: SceneEntityCfg = MISSING
+    """Config for the asset used for the command."""
+
     success_threshold: float = 0.3
     """Distance threshold for successful interception [m]."""
 

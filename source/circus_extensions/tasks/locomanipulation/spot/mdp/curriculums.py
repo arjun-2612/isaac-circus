@@ -38,28 +38,37 @@ def shuttle_distance_curriculum(
     return torch.mean(cmd.level)
 
 
-# def swing_speed_curriculum(
-#     env: ManagerBasedRLEnv,
-#     env_ids: Sequence[int],
-#     command_name: str,
-#     min_swing_speed: float = 4.0,
-#     max_swing_speed: float = 14.0,
-#     headroom: float = 1.25,
-#     ema_decay: float = 0.995,
-#     max_step_per_update: float = 1.0,
-# ) -> float:
-#     """Auto-calibrating swing-speed target for the velocity/follow-through rewards.
+def swing_speed_curriculum(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    command_name: str,
+    min_swing_speed: float = 4.0,
+    max_swing_speed: float = 14.0,
+    headroom: float = 1.25,
+    ema_decay: float = 0.995,
+    max_step_per_update: float = 1.0,
+) -> float:
+    """Auto-calibrating swing-speed target for the velocity/follow-through rewards.
 
-#     Tracks the racket speed actually achieved along the swing direction at impact,
-#     and keeps ``swing_speed`` ~``headroom`` above it. This keeps the reward gradient
-#     steep (reward ~= achieved / target ~= 1/headroom) instead of saturating near 0,
-#     so there is always positive pressure to swing faster -- up to ``max_swing_speed``.
-#     """
-#     cmd = env.command_manager.get_term(command_name)
+    Tracks the racket speed actually achieved along the swing direction at impact,
+    and keeps ``swing_speed`` ~``headroom`` above it. This keeps the reward gradient
+    steep (reward ~= achieved / target ~= 1/headroom) instead of saturating near 0,
+    so there is always positive pressure to swing faster -- up to ``max_swing_speed``.
+    """
+    cmd = env.command_manager.get_term(command_name)
+    
+    # Desired swing direction: oppose the incoming shuttle (XZ only) with an upward bias.
+    swing_dir = -cmd.interception_vel[env_ids].clone()
+    swing_dir[:, 2] = swing_dir[:, 2] + 1.0
+    swing_dir[:, 1] = 0.0  # keep the swing in the forward (sagittal) plane
+    swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
-#     cmd.swing_speed_ema[env_ids] = ema_decay * cmd.swing_speed_ema[env_ids] + (1.0 - ema_decay) * cmd.achieved_racket_speed[env_ids]
-#     desired = min(max(cmd.swing_speed_ema[env_ids] * headroom, min_swing_speed), max_swing_speed)
-#     delta = max(-max_step_per_update, min(max_step_per_update, desired - cmd.swing_speed_target[env_ids]))
-#     cmd.swing_speed_target[env_ids] += delta
+    # Speed along the swing direction -- only forward motion is rewarded.
+    speed_along = torch.sum(cmd.racket_speed_at_intercept[env_ids] * swing_dir, dim=-1)
 
-#     return torch.mean(cmd.swing_speed_target)
+    cmd.swing_speed_ema[env_ids] = ema_decay * cmd.swing_speed_ema[env_ids] + (1.0 - ema_decay) * speed_along
+    desired = torch.clamp(cmd.swing_speed_ema[env_ids] * headroom, min_swing_speed, max_swing_speed)
+    delta = torch.clamp(desired - cmd.swing_speed_target[env_ids], -max_step_per_update, max_step_per_update)
+    cmd.swing_speed_target[env_ids] += delta
+
+    return torch.mean(cmd.swing_speed_target)

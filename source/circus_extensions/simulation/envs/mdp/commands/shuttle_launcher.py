@@ -20,6 +20,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.shuttle_target_visualizer = VisualizationMarkers(cfg.shuttle_target_visualizer_cfg)
         self.shuttle_pos_visualizer = VisualizationMarkers(cfg.shuttle_pos_visualizer_cfg)
         super().__init__(cfg, env)
+        self.cfg.asset_cfg.resolve(env.scene)
 
         self.robot: Articulation = env.scene[cfg.asset_name]
         self._env = env 
@@ -49,7 +50,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.level = torch.zeros((self.num_envs,), device=self.device)
         self.swing_speed_target = torch.full((self.num_envs,), 4.0, device=self.device)
         self.swing_speed_ema = torch.full((self.num_envs,), 4.0 / 1.25, device=self.device)
-        self.achieved_racket_speed = torch.zeros((self.num_envs,), device=self.device)
+        self.achieved_racket_speed = torch.zeros((self.num_envs, 3), device=self.device)
         self.planned_intercept_time = torch.zeros((self.num_envs,), device=self.device)
 
         # Constants
@@ -109,6 +110,10 @@ class ShuttleLauncherCommand(CommandTerm):
     def at_intercept_time(self) -> torch.Tensor:
         # True for exactly one step per target, at the interception instant.
         return self.at_intercept
+    
+    @property
+    def racket_speed_at_intercept(self) -> torch.Tensor:
+        return self.achieved_racket_speed
 
     """
     Command functions.
@@ -269,8 +274,15 @@ class ShuttleLauncherCommand(CommandTerm):
         before = self.current_intercept_time[self.active_env_ids]
         after = torch.clamp(before - self.dt, min=0.0)
 
-        self.at_intercept[self.active_env_ids] = (before > 0.0) & (after <= 0.0)
         self.current_intercept_time[self.active_env_ids] = after
+        self.at_intercept[self.active_env_ids] = (before > 0.0) & (after <= 0.0)
+
+        # Get racket speed at interception point, leave others unchanged
+        self.achieved_racket_speed[self.active_env_ids] = torch.where(
+            self.at_intercept[self.active_env_ids].unsqueeze(-1),
+            self.robot.data.body_vel_w[self.active_env_ids, self.cfg.asset_cfg.body_ids, :3].squeeze(1),
+            self.achieved_racket_speed[self.active_env_ids],
+        )
 
     """
     Debug visualization.

@@ -67,7 +67,6 @@ def ee_approach_reward(
 def ee_velocity_tracking_reward(
     env: ManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    swing_speed: float = 8.0, 
     half_width: float = 0.15,
     perp_std: float = 3.0,
 ) -> torch.Tensor:
@@ -84,7 +83,7 @@ def ee_velocity_tracking_reward(
 
     # Speed along the swing direction -- only forward motion is rewarded.
     speed_along = torch.sum(ee_vel_w * swing_dir, dim=-1)
-    forward = torch.clamp(speed_along / swing_speed, 0.0, 1.0)
+    forward = torch.clamp(speed_along / cmd.swing_speed_target, 0.0, 1.0)
 
     # Off-axis (perpendicular) speed -- penalize so the racket doesn't sweep sideways.
     perp_vec = ee_vel_w - speed_along.unsqueeze(-1) * swing_dir
@@ -124,7 +123,6 @@ def ee_orientation_tracking_reward(
 def ee_follow_through_reward(
     env: ManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    swing_speed: float = 8.0, 
     window: float = 0.2,
     perp_std: float = 3.0,
 ) -> torch.Tensor:
@@ -141,7 +139,7 @@ def ee_follow_through_reward(
     swing_dir = swing_dir / (torch.norm(swing_dir, dim=-1, keepdim=True) + 1e-6)
 
     speed_along = torch.sum(ee_vel_w * swing_dir, dim=-1)
-    forward = torch.clamp(speed_along / swing_speed, -1.0, 1.0)
+    forward = torch.clamp(speed_along / cmd.swing_speed_target, -1.0, 1.0)
 
     perp_vec = ee_vel_w - speed_along.unsqueeze(-1) * swing_dir
     perp_speed = torch.norm(perp_vec, dim=-1)
