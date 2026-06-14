@@ -38,6 +38,9 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     success_threshold: float = 0.3
     """Distance threshold for successful interception [m]."""
 
+    racket_swing_speed_target: float = 4.0
+    """Target swing speed [m/s]."""
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""

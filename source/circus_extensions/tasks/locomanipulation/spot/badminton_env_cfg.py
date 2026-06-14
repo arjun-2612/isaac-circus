@@ -93,6 +93,7 @@ class SpotBadmintonCommandsCfg:
         time_between_targets=2.0,
         intercept_height=1.5,
         num_targets=6,
+        racket_swing_speed_target=4.0,
         ee_frame=SceneEntityCfg("spot_badminton_ee"),
         asset_cfg=SceneEntityCfg("robot", body_names="arm0_racket_face"),
         success_threshold=0.3,

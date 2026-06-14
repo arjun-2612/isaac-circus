@@ -48,8 +48,8 @@ class ShuttleLauncherCommand(CommandTerm):
         self.total_targets = torch.full((self.num_envs,), cfg.num_targets, dtype=torch.int32, device=self.device)
         self.success_buffer = torch.zeros((self.num_envs, cfg.num_targets), device=self.device)
         self.level = torch.zeros((self.num_envs,), device=self.device)
-        self.swing_speed_target = torch.full((self.num_envs,), 4.0, device=self.device)
-        self.swing_speed_ema = torch.full((self.num_envs,), 4.0 / 1.25, device=self.device)
+        self.swing_speed_target = torch.full((self.num_envs,), cfg.racket_swing_speed_target, device=self.device)
+        self.swing_speed_ema = torch.full((self.num_envs,), cfg.racket_swing_speed_target / 1.25, device=self.device)
         self.achieved_racket_speed = torch.zeros((self.num_envs, 3), device=self.device)
         self.planned_intercept_time = torch.zeros((self.num_envs,), device=self.device)
 
