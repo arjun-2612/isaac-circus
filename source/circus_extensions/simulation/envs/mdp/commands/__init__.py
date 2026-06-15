@@ -11,8 +11,6 @@ from .wrench_assist_command_cfg import WrenchAssistCommandCfg
 from .wrench_assist_command import WrenchAssistCommand
 from .rmpc_command_cfg import RMPCCommandCfg
 from .rmpc_command import RMPCCommand
-from .lipm_command_cfg import LIPMCommandCfg
-from .lipm_command import LIPMCommand
 from .shuttle_launcher_cfg import ShuttleLauncherCommandCfg
 from .shuttle_launcher import ShuttleLauncherCommand
 from .multimodal_command_cfg import HuskyBetaMultimodalJointPosCommandCfg
