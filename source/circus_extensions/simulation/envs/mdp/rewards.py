@@ -12,7 +12,7 @@ from __future__ import annotations
 import torch
 from typing import TYPE_CHECKING
 
-from circus_extensions.simulation.envs.mdp import TerrainBasedPose2dCommand, MotionDatasetSampler, RMPCCommand, LIPMCommand, HuskyBetaMultimodalJointPosCommand
+from circus_extensions.simulation.envs.mdp import TerrainBasedPose2dCommand, MotionDatasetSampler, RMPCCommand, HuskyBetaMultimodalJointPosCommand
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
@@ -132,7 +132,7 @@ def foot_target_tracking_reward(
     sensor_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
-    command: RMPCCommand | LIPMCommand = env.command_manager.get_term(command_name)
+    command: RMPCCommand = env.command_manager.get_term(command_name)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
 
     foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :2]  # [E, 4, 2]
@@ -159,7 +159,7 @@ def swing_target_tracking_reward(
     sensor_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
-    command: RMPCCommand | LIPMCommand = env.command_manager.get_term(command_name)
+    command: RMPCCommand = env.command_manager.get_term(command_name)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
 
     foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]  # [E, 4, 3]
