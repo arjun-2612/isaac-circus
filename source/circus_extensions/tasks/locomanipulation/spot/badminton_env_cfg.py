@@ -435,14 +435,14 @@ class SpotBadmintonRewardsCfg:
     # base_motion = RewardTermCfg(
     #     func=spot_mdp.base_motion_penalty, weight=-1.0, params={"asset_cfg": SceneEntityCfg("robot")}
     # )
-    # base_height = RewardTermCfg(
-    #     func=spot_mdp.isaac.base_height_l2, 
-    #     weight=-5.0, 
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot"),
-    #         "target_height": 0.525,
-    #     },
-    # )
+    base_height = RewardTermCfg(
+        func=spot_mdp.isaac.base_height_l2, 
+        weight=-5.0, 
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "target_height": 0.525,
+        },
+    )
     # foot_slip = RewardTermCfg(
     #     func=spot_mdp.foot_slip_penalty,
     #     weight=-0.5,
@@ -459,13 +459,13 @@ class SpotBadmintonRewardsCfg:
     )
 
     # joint level regularizations
-    # joint_pos = RewardTermCfg(
-    #     func=spot_mdp.joint_dev_from_default,
-    #     weight=-0.7,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", joint_names="[fh][lr]_.*"),
-    #     },
-    # )
+    joint_pos = RewardTermCfg(
+        func=spot_mdp.joint_dev_from_default,
+        weight=-0.7,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="[fh][lr]_.*"),
+        },
+    )
     # joint_vel = RewardTermCfg(
     #     func=spot_mdp.isaac.joint_vel_l2,
     #     weight=-1.0e-3,
@@ -477,11 +477,11 @@ class SpotBadmintonRewardsCfg:
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
     )
 
-    joint_pos_limits = RewardTermCfg(
-        func=spot_mdp.isaac.joint_pos_limits,
-        weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
-    )
+    # joint_pos_limits = RewardTermCfg(
+    #     func=spot_mdp.isaac.joint_pos_limits,
+    #     weight=-1.0,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
+    # )
     joint_acc = RewardTermCfg(
         func=spot_mdp.isaac.joint_acc_l2,
         weight=-1.0e-6,
