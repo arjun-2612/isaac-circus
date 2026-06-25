@@ -385,6 +385,11 @@ class SpotBadmintonRewardsCfg:
         weight=-5.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*leg"), "threshold": 1.0},
     )
+    impact = RewardTermCfg(
+        func=spot_mdp.impact_penalty,
+        weight=-1.0e-6,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=".*leg")},
+    )
 
     # joint level regularizations
     joint_pos = RewardTermCfg(

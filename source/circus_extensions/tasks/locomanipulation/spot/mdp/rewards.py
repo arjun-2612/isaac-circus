@@ -137,3 +137,13 @@ def face_net_reward(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEnt
     cos_theta = torch.sum(forward_dir * net_normal, dim=-1)
     
     return cos_theta
+
+
+def impact_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize Z-axis linear accelerations on the articulation using L2 squared kernel.
+
+    NOTE: Only the bodies configured in :attr:`asset_cfg.body_ids` will have their linear accelerations contribute to the term.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.body_lin_acc_w[:, asset_cfg.body_ids, 2]), dim=1)
