@@ -371,7 +371,7 @@ class SpotBadmintonRewardsCfg:
     )
 
     # -- penalties
-    action_smoothness = RewardTermCfg(func=spot_mdp.action_smoothness_penalty, weight=-0.03) # prev -1.0
+    action_smoothness = RewardTermCfg(func=spot_mdp.action_smoothness_penalty, weight=-0.03)
     base_height = RewardTermCfg(
         func=spot_mdp.isaac.base_height_l2, 
         weight=-15.0, 
@@ -382,7 +382,7 @@ class SpotBadmintonRewardsCfg:
     )
     collision = RewardTermCfg(
         func=spot_mdp.undesired_contacts,
-        weight=-5.0, # prev -5.0
+        weight=-5.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*leg"), "threshold": 1.0},
     )
 
