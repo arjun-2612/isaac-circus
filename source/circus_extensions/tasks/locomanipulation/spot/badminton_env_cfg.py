@@ -346,7 +346,7 @@ class SpotBadmintonRewardsCfg:
     # -- task: swing and follow through
     ee_velocity = RewardTermCfg(
         func=spot_mdp.ee_velocity_tracking_reward,
-        weight=1200.0,
+        weight=3600.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face"),
             "perp_std": 3.0,
@@ -453,7 +453,7 @@ class SpotBadmintonCurriculumCfg:
         func=spot_mdp.swing_speed_curriculum,
         params={
             "command_name": "shuttle_launcher",
-            "min_swing_speed": 4.0,
+            "min_swing_speed": 7.0,
             "max_swing_speed": 14.0,
             "headroom": 1.25,
             "ema_decay": 0.995,
