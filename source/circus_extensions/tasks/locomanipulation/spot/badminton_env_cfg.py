@@ -93,7 +93,7 @@ class SpotBadmintonCommandsCfg:
         time_between_targets=2.0,
         intercept_height=1.5,
         num_targets=6,
-        racket_swing_speed_target=4.0,
+        racket_swing_speed_target=8.0,
         ee_frame=SceneEntityCfg("spot_badminton_ee"),
         asset_cfg=SceneEntityCfg("robot", body_names="arm0_racket_face"),
         success_threshold=0.3,
@@ -453,7 +453,7 @@ class SpotBadmintonCurriculumCfg:
         func=spot_mdp.swing_speed_curriculum,
         params={
             "command_name": "shuttle_launcher",
-            "min_swing_speed": 7.0,
+            "min_swing_speed": 5.0,
             "max_swing_speed": 14.0,
             "headroom": 1.25,
             "ema_decay": 0.995,
