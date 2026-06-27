@@ -6,9 +6,9 @@ task:
   name: Spot-Badminton-Train 
   num_envs: 4096
   headless: true
-  resume: false 
-  run_folder: 2025-09-11_14-36-14
-  checkpoint: model_5400.pt
+  resume: true 
+  run_folder: 2026-06-26_07-44-16
+  checkpoint: model_3000.pt
 
 play:
   folder: 2026-06-14_11-47-32
@@ -47,7 +47,7 @@ slurm:
 container:
   docker_user: arjunviswanathan        # your Docker Hub username
   image_name: sslab-isaaclab           # repo name on Docker Hub
-  image_tag: 20250911-141239
+  image_tag: 20260626-070443
   convert:
     urdf_in: /workspace/robotarium/spot/urdf/spot_badminton.urdf
     usd_out: /workspace/robotarium/spot/usd/spot_badminton/spot_badminton.usd
