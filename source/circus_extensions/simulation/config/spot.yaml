@@ -7,8 +7,8 @@ task:
   num_envs: 4096
   headless: true
   resume: true 
-  run_folder: 2026-06-26_07-44-16
-  checkpoint: model_3000.pt
+  run_folder: 2026-06-27_14-16-14
+  checkpoint: model_6200.pt
 
 play:
   folder: 2026-06-14_11-47-32
