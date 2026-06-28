@@ -669,6 +669,11 @@ def action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
     return torch.linalg.norm((env.action_manager.action - env.action_manager.prev_action), dim=1)
 
 
+def legs_action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Penalize large instantaneous changes in the network action output for just leg joints"""
+    return torch.linalg.norm((env.action_manager.action[:, :12] - env.action_manager.prev_action[:, :12]), dim=1)
+
+
 def arm_action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Penalize large instantaneous changes in the network action output for just arm joints"""
     return torch.linalg.norm((env.action_manager.action[:, 12:] - env.action_manager.prev_action[:, 12:]), dim=1)
