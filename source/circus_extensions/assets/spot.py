@@ -76,7 +76,8 @@ SPOT_BADMINTON_CFG = ArticulationCfg(
             },
             stiffness=100.0,
             damping=2.0,
-            friction=0.015,
+            armature=0.01,
+            friction=0.02,
             # motor_strength_range=(0.85, 1.0),
             min_delay=0,  # physics time steps (min: 2.0*0=0.0ms)
             max_delay=4,  # physics time steps (max: 2.0*4=8.0ms)
