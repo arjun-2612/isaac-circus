@@ -11,8 +11,8 @@ task:
   checkpoint: model_6200.pt
 
 play:
-  folder: 2026-06-14_11-47-32
-  checkpoint: model_3000.pt
+  folder: 2026-07-03_13-44-53
+  checkpoint: model_2800.pt
 
 sim:
   env_path: miniconda3/envs/isaac450/lib/python3.10/site-packages/isaacsim/exts/isaacsim.examples.interactive/isaacsim/examples/interactive/user_examples
@@ -24,7 +24,7 @@ convert:
 
 transfer:
   source_path: /projects/siliconsynapselab/sslab_isaaclab/logs/rsl_rl/spot_badminton_rl
-  log_name: 2026-06-12_12-43-36
+  log_name: 2026-07-03_13-44-53
   dest_path: logs/rsl_rl/spot_badminton_rl
 
 visuals:
