@@ -4,6 +4,7 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm
 from isaaclab.markers import VisualizationMarkers
@@ -59,6 +60,8 @@ class ShuttleLauncherCommand(CommandTerm):
         self.exp_kdt = torch.exp(-self.k * self.dt)
         self.intercept_height = cfg.intercept_height
         self.time_between_targets = cfg.time_between_targets
+        self.restitution = cfg.restitution
+        self.contact_radius = cfg.contact_radius
         self.max_prediction_time = 3.5
         self.active_env_ids = torch.tensor([], device=self.device, dtype=torch.int64)
 
@@ -283,6 +286,53 @@ class ShuttleLauncherCommand(CommandTerm):
             self.robot.data.body_vel_w[self.active_env_ids, self.cfg.asset_cfg.body_ids, :3].squeeze(1),
             self.achieved_racket_speed[self.active_env_ids],
         )
+
+        # Deflect the shuttle off the racket at the interception instant so the post-impact
+        # trajectory reflects the actual swing (racket speed + face orientation).
+        self._apply_racket_bounce(self.at_intercept.nonzero(as_tuple=False).flatten())
+
+    def _apply_racket_bounce(self, hit_ids: torch.Tensor):
+        """Deflect the shuttle off the racket at the moment of interception.
+
+        Models the impact as an elastic collision against an infinitely-heavy moving plane
+        (racket inertia >> shuttle inertia): in the racket's frame the shuttle-velocity
+        component along the racket face normal is reversed (scaled by the restitution) while
+        the tangential component is preserved, then the racket velocity is added back. Only
+        shuttles physically within ``contact_radius`` of the racket sweet-spot are deflected;
+        the rest pass through untouched (a real miss).
+        """
+        if hit_ids.numel() == 0:
+            return
+
+        body_ids = self.cfg.asset_cfg.body_ids
+
+        # Only deflect shuttles the racket actually reaches. Use the sweet-spot frame that the
+        # approach reward / success metric already key off of.
+        racket_pos_w = self._env.scene[self.cfg.ee_frame.name].data.target_pos_w.squeeze(1)[hit_ids]
+        contact = torch.norm(racket_pos_w - self.shuttle_pos_w[hit_ids], dim=-1) < self.contact_radius
+        hit_ids = hit_ids[contact]
+        if hit_ids.numel() == 0:
+            return
+
+        # Racket state at contact.
+        ee_quat_w = self.robot.data.body_quat_w[hit_ids, body_ids, :].squeeze(1)   # (H,4)
+        v_racket = self.robot.data.body_vel_w[hit_ids, body_ids, :3].squeeze(1)    # (H,3)
+
+        # Racket face normal = local -Z rotated to world (matches ee_orientation_tracking_reward).
+        local_normal = torch.tensor([0.0, 0.0, -1.0], device=self.device).expand(hit_ids.shape[0], 3)
+        n = math_utils.quat_rotate(ee_quat_w, local_normal)
+        n = n / (torch.norm(n, dim=-1, keepdim=True) + 1e-6)
+
+        # Reflect in the racket's frame; orient the normal to the face meeting the shuttle so the
+        # outgoing direction tracks the racket orientation regardless of which side makes contact.
+        v_rel = self.shuttle_vel_w[hit_ids] - v_racket
+        side = -torch.sign((v_rel * n).sum(dim=-1, keepdim=True))
+        side = torch.where(side == 0.0, torch.ones_like(side), side)
+        n_eff = n * side
+        vn = (v_rel * n_eff).sum(dim=-1, keepdim=True) * n_eff
+        v_rel_out = v_rel - (1.0 + self.restitution) * vn
+
+        self.shuttle_vel_w[hit_ids] = v_rel_out + v_racket
 
     """
     Debug visualization.

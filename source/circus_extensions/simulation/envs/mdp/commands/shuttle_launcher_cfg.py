@@ -41,6 +41,20 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     racket_swing_speed_target: float = 4.0
     """Target swing speed [m/s]."""
 
+    restitution: float = 0.4
+    """Coefficient of restitution for the racket-shuttle impact (1.0 = perfectly elastic).
+
+    Applied to the normal component of the shuttle velocity in the racket's frame. Tune /
+    system-ID against real return speeds later.
+    """
+
+    contact_radius: float = 0.25
+    """Max distance [m] between the racket sweet-spot and the shuttle for a hit to register.
+
+    Interceptions where the racket is farther than this are treated as misses: the shuttle
+    passes through untouched instead of being deflected.
+    """
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""
