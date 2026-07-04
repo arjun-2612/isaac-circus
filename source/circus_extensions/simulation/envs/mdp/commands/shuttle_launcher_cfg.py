@@ -57,12 +57,28 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     L = 2m/(rho*S*C_D) (Cohen et al. 2015). Sets the terminal velocity sqrt(g*L) ~= 6.3 m/s.
     """
 
+    # --- Predicted-target (Phase 2b) measurement-noise model ---
+    # These emulate the error of the onboard predictor that, at deployment, forward-integrates the
+    # drag model from the mocap-measured shuttle state to estimate the interception. A persistent
+    # per-target bias is sampled once per shuttle flight; the velocity term is scaled by time-to-go
+    # so the predicted target converges to the truth as the shuttle approaches. Calibrate against
+    # real mocap + predictor error.
+    meas_pos_noise: float = 0.02
+    """Shuttle position measurement error [m] (persistent per-target bias on the predicted target)."""
+
+    meas_vel_noise: float = 0.4
+    """Differenced-velocity measurement error [m/s]; propagated to the target scaled by time-to-go."""
+
+    meas_time_rel_noise: float = 0.1
+    """Relative error on the predicted time-to-interception (fraction of time-to-go)."""
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""
 
         px: tuple[float, float] = MISSING  # min max [m]
         py: tuple[float, float] = MISSING  # min max [m]
+        vx: tuple[float, float] = MISSING  # min max [m/s]; max-difficulty range, curriculum ramps from its center
         vy: tuple[float, float] = MISSING  # min max [m/s]
         vz: tuple[float, float] = MISSING  # min max [m/s]
 

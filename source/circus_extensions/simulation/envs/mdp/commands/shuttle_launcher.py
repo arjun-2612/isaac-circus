@@ -54,6 +54,11 @@ class ShuttleLauncherCommand(CommandTerm):
         self.achieved_racket_speed = torch.zeros((self.num_envs, 3), device=self.device)
         self.planned_intercept_time = torch.zeros((self.num_envs,), device=self.device)
 
+        # Predicted-target measurement bias (persistent per shuttle flight; see cfg meas_*_noise)
+        self.meas_pos_bias = torch.zeros((self.num_envs, 3), device=self.device)
+        self.meas_vel_bias = torch.zeros((self.num_envs, 3), device=self.device)
+        self.meas_time_rel_bias = torch.zeros((self.num_envs,), device=self.device)
+
         # Constants
         self.g = 9.81
         self.g_vec = torch.tensor([0.0, 0.0, -self.g], device=self.device)  # gravity as a vector
@@ -62,6 +67,9 @@ class ShuttleLauncherCommand(CommandTerm):
         self.time_between_targets = cfg.time_between_targets
         self.restitution = torch.full((self.num_envs,), cfg.restitution, device=self.device)  # per-env, DR-able
         self.contact_radius = cfg.contact_radius
+        self.meas_pos_noise = cfg.meas_pos_noise
+        self.meas_vel_noise = cfg.meas_vel_noise
+        self.meas_time_rel_noise = cfg.meas_time_rel_noise
         self.max_prediction_time = 3.5
         self.active_env_ids = torch.tensor([], device=self.device, dtype=torch.int64)
 
@@ -118,6 +126,32 @@ class ShuttleLauncherCommand(CommandTerm):
     def racket_speed_at_intercept(self) -> torch.Tensor:
         return self.achieved_racket_speed
 
+    @property
+    def predicted_intercept_pos(self) -> torch.Tensor:
+        # Emulated onboard-predictor interception (world frame): GT interception + a persistent
+        # per-target measurement bias, with the velocity-error term scaled by time-to-go so the
+        # estimate converges to the truth as the shuttle approaches. This is the target the policy
+        # sees; the deployed robot computes it by integrating the drag model from the mocap state.
+        return (
+            self.current_intercept_pos_w
+            + self.meas_pos_bias
+            + self.meas_vel_bias * self.current_intercept_time.unsqueeze(-1)
+        )
+
+    @property
+    def predicted_intercept_time(self) -> torch.Tensor:
+        return self.current_intercept_time * (1.0 + self.meas_time_rel_bias)
+
+    @property
+    def intercept_pos_prediction_error(self) -> torch.Tensor:
+        return self.predicted_intercept_pos - self.current_intercept_pos_w
+
+    @property
+    def is_shuttle_active(self) -> torch.Tensor:
+        active = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device)
+        active[self.active_env_ids] = True
+        return active & (self.targets_generated < self.total_targets)
+
     """
     Command functions.
     """
@@ -159,9 +193,11 @@ class ShuttleLauncherCommand(CommandTerm):
             # sample velocity commands
             r = torch.empty((len(new_active), self.cfg.num_targets), device=self.device)
             r_unit = torch.rand((len(new_active), self.cfg.num_targets), device=self.device)
-            # vx: (-7.5, -7.5) -> (-10, -6)
-            vx_lo = -7.5 - 2.5 * lvl
-            vx_hi = -7.5 + 2.5 * lvl
+            # vx: curriculum ramps from the cfg range's center outward to its full extent at lvl=1.
+            vx_center = 0.5 * (self.cfg.ranges.vx[0] + self.cfg.ranges.vx[1])
+            vx_half = 0.5 * (self.cfg.ranges.vx[1] - self.cfg.ranges.vx[0])
+            vx_lo = vx_center - vx_half * lvl
+            vx_hi = vx_center + vx_half * lvl
             # pz: (1.5, 2.0) -> (0.5, 2.5)
             pz_lo = torch.clamp(1.5 - 1.0 * lvl, min=0.3)  # (N, 1)
             pz_hi = 2.0 + 0.5 * lvl  # (N, 1)
@@ -208,6 +244,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.planned_intercept_time[env_ids] = self.current_intercept_time[env_ids].clone()
         self.achieved_racket_speed[env_ids] = 0.0
         self.at_intercept[env_ids] = False
+        self._resample_measurement_bias(env_ids)
 
     def _update_command(self):
         mask = self.time_since_last_resample >= self.time_between_targets
@@ -231,6 +268,7 @@ class ShuttleLauncherCommand(CommandTerm):
                 self.planned_intercept_time[valid_ids] = self.current_intercept_time[valid_ids].clone()
                 self.current_intercept_pos_w[valid_ids] = self.shuttle_interception_pos_w[valid_ids, t_idx].clone()
                 self.current_intercept_vel_w[valid_ids] = self.shuttle_interception_vel_w[valid_ids, t_idx].clone()
+                self._resample_measurement_bias(valid_ids)
 
         # Step the shuttle trajectory one control step under quadratic drag.
         active = self.active_env_ids
@@ -259,6 +297,19 @@ class ShuttleLauncherCommand(CommandTerm):
         # Deflect the shuttle off the racket at the interception instant so the post-impact
         # trajectory reflects the actual swing (racket speed + face orientation).
         self._apply_racket_bounce(self.at_intercept.nonzero(as_tuple=False).flatten())
+
+    def _resample_measurement_bias(self, env_ids: torch.Tensor):
+        """Sample a fresh per-target measurement bias, held constant over the shuttle's flight.
+
+        Emulates the onboard interception predictor's error at deployment: the bias is persistent
+        per shuttle (a biased velocity estimate stays biased), and its effect on the predicted
+        target is scaled by time-to-go (see ``predicted_intercept_pos``), so the target converges
+        smoothly to the truth as the shuttle approaches rather than jittering independently.
+        """
+        n = len(env_ids)
+        self.meas_pos_bias[env_ids] = (2.0 * torch.rand((n, 3), device=self.device) - 1.0) * self.meas_pos_noise
+        self.meas_vel_bias[env_ids] = (2.0 * torch.rand((n, 3), device=self.device) - 1.0) * self.meas_vel_noise
+        self.meas_time_rel_bias[env_ids] = (2.0 * torch.rand(n, device=self.device) - 1.0) * self.meas_time_rel_noise
 
     def _apply_racket_bounce(self, hit_ids: torch.Tensor):
         """Deflect the shuttle off the racket at the moment of interception.

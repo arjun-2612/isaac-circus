@@ -86,14 +86,17 @@ class SpotBadmintonCommandsCfg:
         resampling_time_range=(12.0, 12.0),
         debug_vis=True,
         ranges=spot_mdp.ShuttleLauncherCommandCfg.Ranges(
-            px=(6.0, 7.0), py=(-1.0, 1.0), 
-            vy=(-2.0, 2.0), vz=(4.0, 8.0),
+            px=(6.0, 7.0), py=(-1.0, 1.0),
+            vx=(-16.0, -9.0), vy=(-2.0, 2.0), vz=(8.0, 13.0),
         ),
         standing_env_ratio=0.1,
         time_between_targets=2.0,
         intercept_height=1.5,
         num_targets=6,
         racket_swing_speed_target=8.0,
+        restitution=0.8,
+        contact_radius=0.225,
+        aero_length=4.1,
         ee_frame=SceneEntityCfg("spot_badminton_ee"),
         asset_cfg=SceneEntityCfg("robot", body_names="arm0_racket_face"),
         success_threshold=0.3,
@@ -164,16 +167,26 @@ class SpotBadmintonObservationsCfg:
             params={"asset_cfg": SceneEntityCfg("robot", body_names="arm0_racket_face")},
         )
 
-        # Swing target command (position relative to base, time, velocity)
+        # Shuttle state
         swing_target_pos = ObsTerm(
-            func=spot_mdp.swing_target_position,
+            func=spot_mdp.predicted_swing_target_position,
             params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "shuttle_launcher"},
             noise=Unoise(n_min=-0.02, n_max=0.02),
         )
         time_to_swing = ObsTerm(
-            func=spot_mdp.time_to_swing, 
+            func=spot_mdp.predicted_time_to_swing,
             params={"command_name": "shuttle_launcher"},
             noise=Unoise(n_min=-0.1, n_max=0.1),
+        )
+        shuttle_pos = ObsTerm(
+            func=spot_mdp.shuttlecock_position_gt,
+            params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "shuttle_launcher"},
+            noise=Unoise(n_min=-0.02, n_max=0.02),
+            history_length=5,
+        )
+        shuttle_detected = ObsTerm(
+            func=spot_mdp.shuttle_detected,
+            params={"command_name": "shuttle_launcher"},
         )
 
         def __post_init__(self):
@@ -242,6 +255,9 @@ class SpotBadmintonObservationsCfg:
             func=spot_mdp.targets_remaining, params={"command_name": "shuttle_launcher"})
         next_target_dist = ObsTerm(
             func=spot_mdp.next_target_dist, params={"command_name": "shuttle_launcher"})
+        swing_target_prediction_error = ObsTerm(
+            func=spot_mdp.swing_target_prediction_error,
+            params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "shuttle_launcher"})
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -303,6 +319,15 @@ class SpotBadmintonEventCfg:
             "position_range": (-0.2, 0.2),
             "velocity_range": (-0.0, 0.0),
             "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+
+    randomize_restitution = EventTerm(
+        func=spot_mdp.randomize_command_restitution,
+        mode="reset",
+        params={
+            "command_name": "shuttle_launcher",
+            "restitution_range": (0.4, 0.7),
         },
     )
 

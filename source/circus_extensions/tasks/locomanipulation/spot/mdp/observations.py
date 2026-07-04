@@ -37,6 +37,56 @@ def swing_target_position(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = Scen
     return shuttle_intercept_b
 
 
+def predicted_swing_target_position(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), command_name: str = "shuttle_launcher") -> torch.Tensor:
+    """Predicted interception position (base frame) from the emulated onboard predictor.
+
+    This is the POLICY-side target: it stands in for what the deployed robot computes by
+    forward-integrating the drag model from the mocap-measured shuttle state. The sim models the
+    predictor's error (persistent per-target bias, converging as the shuttle nears) so training
+    matches deployment. The exact ground-truth interception (``swing_target_position``) stays a
+    critic-only privileged signal.
+    """
+    cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    base_pos = asset.data.root_pos_w.clone()
+    base_quat = asset.data.root_quat_w.clone()
+    pred_b = math_utils.quat_rotate_inverse(base_quat, cmd.predicted_intercept_pos - base_pos)
+
+    assert torch.isfinite(pred_b).all(), "NaN or Inf detected in tensor predicted_swing_target_pos_b!"
+    return pred_b
+
+
+def predicted_time_to_swing(env: ManagerBasedEnv, command_name: str = "shuttle_launcher") -> torch.Tensor:
+    """Predicted time-to-interception from the emulated onboard predictor (policy-side)."""
+    cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name)
+    t = cmd.predicted_intercept_time.unsqueeze(-1)
+    assert torch.isfinite(t).all(), "NaN or Inf detected in tensor predicted_time_to_swing!"
+    return t
+
+
+def swing_target_prediction_error(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), command_name: str = "shuttle_launcher") -> torch.Tensor:
+    """Privileged (critic) base-frame error between the policy's predicted target and the truth."""
+    cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name)
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    base_quat = asset.data.root_quat_w.clone()
+    err_b = math_utils.quat_rotate_inverse(base_quat, cmd.intercept_pos_prediction_error)
+
+    assert torch.isfinite(err_b).all(), "NaN or Inf detected in tensor swing_target_prediction_error!"
+    return err_b
+
+
+def shuttle_detected(env: ManagerBasedEnv, command_name: str = "shuttle_launcher") -> torch.Tensor:
+    """Detection flag (1 = a shuttle is currently tracked, 0 = none), like the paper's detect flag.
+
+    Lets the policy distinguish an incoming shuttle from no-shuttle periods (standing envs / after
+    the last target), where the raw shuttle position observation is stale.
+    """
+    cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name)
+    return cmd.is_shuttle_active.float().unsqueeze(-1)
+
+
 def swing_target_velocity(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), command_name: str = "shuttle_launcher") -> torch.Tensor:
     """Return the interception velocity of the shuttle relative to the base."""
     cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name) 
