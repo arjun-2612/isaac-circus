@@ -45,7 +45,7 @@ class ShuttleLauncherCommand(CommandTerm):
         # Other variables
         self.targets_generated = torch.zeros((self.num_envs,), dtype=torch.int32, device=self.device)  # (E,)
         self.time_since_last_resample = torch.zeros((self.num_envs,), device=self.device)
-        self.k = torch.full((self.num_envs,), 0.55, device=self.device)
+        self.L = torch.full((self.num_envs,), cfg.aero_length, device=self.device)  # aerodynamic length
         self.total_targets = torch.full((self.num_envs,), cfg.num_targets, dtype=torch.int32, device=self.device)
         self.success_buffer = torch.zeros((self.num_envs, cfg.num_targets), device=self.device)
         self.level = torch.zeros((self.num_envs,), device=self.device)
@@ -56,11 +56,11 @@ class ShuttleLauncherCommand(CommandTerm):
 
         # Constants
         self.g = 9.81
+        self.g_vec = torch.tensor([0.0, 0.0, -self.g], device=self.device)  # gravity as a vector
         self.dt = self._env.step_dt
-        self.exp_kdt = torch.exp(-self.k * self.dt)
         self.intercept_height = cfg.intercept_height
         self.time_between_targets = cfg.time_between_targets
-        self.restitution = cfg.restitution
+        self.restitution = torch.full((self.num_envs,), cfg.restitution, device=self.device)  # per-env, DR-able
         self.contact_radius = cfg.contact_radius
         self.max_prediction_time = 3.5
         self.active_env_ids = torch.tensor([], device=self.device, dtype=torch.int64)
@@ -186,48 +186,17 @@ class ShuttleLauncherCommand(CommandTerm):
             self.shuttle_init_vel_w[new_active, :, 2] = r.uniform_(*self.cfg.ranges.vz)
 
             self.shuttle_init_pos_w[new_active, :, :2] += self.robot.data.root_pos_w[new_active, :2].unsqueeze(1)
-            
-            # Interception time as shuttle propagates
-            self.time_to_interception[new_active] = self.time_to_height_linear_drag(
-                z0=self.shuttle_init_pos_w[new_active, :, 2],
-                vz0=self.shuttle_init_vel_w[new_active, :, 2],
-                z_int=torch.full_like(self.shuttle_init_pos_w[new_active, :, 2], self.intercept_height),
-                k=self.k[new_active].unsqueeze(-1),
-                dt_max=self.max_prediction_time,
-            )
 
-            # Interception position and velocity XYZ of shuttle 
-            k = self.k[new_active].unsqueeze(-1)
-            exp_kt = torch.exp(-k * self.time_to_interception[new_active])
-            
-            self.shuttle_interception_pos_w[new_active, :, 0] = (
-                self.shuttle_init_pos_w[new_active, :, 0] 
-                + (self.shuttle_init_vel_w[new_active, :, 0] / k) 
-                * (1.0 - exp_kt)
+            # Interception time / pos / vel by forward-integrating the quadratic-drag dynamics
+            # until each shuttle descends through the interception height.
+            t_int, pos_int, vel_int = self._predict_interception(
+                self.shuttle_init_pos_w[new_active],
+                self.shuttle_init_vel_w[new_active],
+                self.L[new_active],
             )
-            self.shuttle_interception_pos_w[new_active, :, 1] = (
-                self.shuttle_init_pos_w[new_active, :, 1] 
-                + (self.shuttle_init_vel_w[new_active, :, 1] / k) 
-                * (1.0 - exp_kt)
-            )
-            self.shuttle_interception_pos_w[new_active, :, 2] = (
-                self.shuttle_init_pos_w[new_active, :, 2]
-                + (1.0 / k) * (self.shuttle_init_vel_w[new_active, :, 2] 
-                + (self.g / k)) * (1.0 - exp_kt)
-                - (self.g / k) * self.time_to_interception[new_active]
-            )
-
-            self.shuttle_interception_vel_w[new_active, :, 0] = (
-                self.shuttle_init_vel_w[new_active, :, 0] * exp_kt
-            )
-            self.shuttle_interception_vel_w[new_active, :, 1] = (
-                self.shuttle_init_vel_w[new_active, :, 1] * exp_kt
-            )
-            self.shuttle_interception_vel_w[new_active, :, 2] = (
-                (self.shuttle_init_vel_w[new_active, :, 2] 
-                + (self.g / k)) * exp_kt 
-                - (self.g / k)
-            )
+            self.time_to_interception[new_active] = t_int
+            self.shuttle_interception_pos_w[new_active] = pos_int
+            self.shuttle_interception_vel_w[new_active] = vel_int
 
         # Set the values for the first target
         self.shuttle_pos_w[env_ids] = self.shuttle_init_pos_w[env_ids, 0].clone()
@@ -263,14 +232,14 @@ class ShuttleLauncherCommand(CommandTerm):
                 self.current_intercept_pos_w[valid_ids] = self.shuttle_interception_pos_w[valid_ids, t_idx].clone()
                 self.current_intercept_vel_w[valid_ids] = self.shuttle_interception_vel_w[valid_ids, t_idx].clone()
 
-        # Step the shuttle trajectory
-        self.shuttle_pos_w[self.active_env_ids, 0] += (self.shuttle_vel_w[self.active_env_ids, 0]/self.k[self.active_env_ids]) * (1.0 - self.exp_kdt[self.active_env_ids])
-        self.shuttle_pos_w[self.active_env_ids, 1] += (self.shuttle_vel_w[self.active_env_ids, 1]/self.k[self.active_env_ids]) * (1.0 - self.exp_kdt[self.active_env_ids])
-        self.shuttle_pos_w[self.active_env_ids, 2] += (1.0/self.k[self.active_env_ids])*(self.shuttle_vel_w[self.active_env_ids, 2] + (self.g/self.k[self.active_env_ids]))*(1.0 - self.exp_kdt[self.active_env_ids]) - (self.g/self.k[self.active_env_ids])*self.dt
-
-        self.shuttle_vel_w[self.active_env_ids, 0] *= self.exp_kdt[self.active_env_ids]
-        self.shuttle_vel_w[self.active_env_ids, 1] *= self.exp_kdt[self.active_env_ids]
-        self.shuttle_vel_w[self.active_env_ids, 2] = (self.shuttle_vel_w[self.active_env_ids, 2] + (self.g/self.k[self.active_env_ids]))*self.exp_kdt[self.active_env_ids] - (self.g/self.k[self.active_env_ids])
+        # Step the shuttle trajectory one control step under quadratic drag.
+        active = self.active_env_ids
+        inv_L = (1.0 / self.L[active]).unsqueeze(-1)
+        new_pos, new_vel = self._drag_rk4_step(
+            self.shuttle_pos_w[active], self.shuttle_vel_w[active], self.dt, inv_L
+        )
+        self.shuttle_pos_w[active] = new_pos
+        self.shuttle_vel_w[active] = new_vel
 
         self.time_since_last_resample[self.active_env_ids] += self.dt
 
@@ -330,7 +299,7 @@ class ShuttleLauncherCommand(CommandTerm):
         side = torch.where(side == 0.0, torch.ones_like(side), side)
         n_eff = n * side
         vn = (v_rel * n_eff).sum(dim=-1, keepdim=True) * n_eff
-        v_rel_out = v_rel - (1.0 + self.restitution) * vn
+        v_rel_out = v_rel - (1.0 + self.restitution[hit_ids]).unsqueeze(-1) * vn
 
         self.shuttle_vel_w[hit_ids] = v_rel_out + v_racket
 
@@ -353,50 +322,65 @@ class ShuttleLauncherCommand(CommandTerm):
     Internal helpers.
     """
 
-    def time_to_height_linear_drag(self, z0, vz0, z_int, k, dt_max=5.0, iters=20, g=9.81):
-        k = torch.clamp(k, min=1e-6)
+    def _drag_rk4_step(self, pos, vel, dt, inv_L):
+        """One RK4 step of the quadratic-drag dynamics ``dv/dt = g - ||v|| * v / L``.
 
-        def z_of_t(t):
-            exp_term = torch.exp(-k * t)
-            return z0 + (1.0 / k) * (vz0 + g / k) * (1.0 - exp_term) - (g / k) * t
+        ``pos`` / ``vel`` are (..., 3); ``inv_L`` (= 1 / L) is broadcastable to (..., 1).
+        """
+        def accel(v):
+            speed = torch.norm(v, dim=-1, keepdim=True)
+            return self.g_vec - speed * v * inv_L
 
-        def f(t):
-            return z_of_t(t) - z_int
+        k1x, k1v = vel, accel(vel)
+        k2x, k2v = vel + 0.5 * dt * k1v, accel(vel + 0.5 * dt * k1v)
+        k3x, k3v = vel + 0.5 * dt * k2v, accel(vel + 0.5 * dt * k2v)
+        k4x, k4v = vel + dt * k3v, accel(vel + dt * k3v)
 
-        # apex time (where vz(t)=0)
-        numer = k * vz0 + g  # = g + k*vz0
-        valid_apex = numer > 1e-6
-        t_apex = (1.0 / k) * torch.log(torch.clamp(numer / g, min=1e-6))
-        t_apex = torch.where((vz0 > 0.0) & valid_apex, t_apex, torch.zeros_like(t_apex))
-        t_start = torch.clamp(t_apex, 0.0, dt_max)
+        new_pos = pos + (dt / 6.0) * (k1x + 2.0 * k2x + 2.0 * k3x + k4x)
+        new_vel = vel + (dt / 6.0) * (k1v + 2.0 * k2v + 2.0 * k3v + k4v)
+        return new_pos, new_vel
 
-        # Bracket root on [t_start, dt_max]
-        t_lo = t_start
-        t_hi = torch.full_like(z0, dt_max)
+    def _predict_interception(self, pos0, vel0, L):
+        """Forward-integrate sampled shuttles until they descend through the interception height.
 
-        f_lo = f(t_lo)
-        f_hi = f(t_hi)
+        Returns ``(time, pos, vel)`` at the first descending crossing of ``intercept_height`` for
+        each shuttle, batched over (N, num_targets, ...). Shuttles that never cross within
+        ``max_prediction_time`` fall back to their state at ``max_prediction_time``.
+        """
+        inv_L = (1.0 / L).view(-1, 1, 1)  # (N,1,1) -> broadcasts over targets & xyz
+        z_int = self.intercept_height
 
-        # Need sign change AND must be descending at the solution (searching after apex enforces that)
-        has_down = (f_lo * f_hi) <= 0.0
+        pos, vel = pos0.clone(), vel0.clone()
+        found = torch.zeros(pos0.shape[:-1], dtype=torch.bool, device=self.device)  # (N,T)
+        t_int = torch.full(pos0.shape[:-1], self.max_prediction_time, device=self.device)
+        pos_int, vel_int = pos0.clone(), vel0.clone()
 
-        # Bisection only where has_down
-        tL = torch.where(has_down, t_lo, t_hi)
-        tH = torch.where(has_down, t_hi, t_hi)
-        fL = torch.where(has_down, f_lo, f_hi)
-        fH = torch.where(has_down, f_hi, f_hi)
+        n_steps = int(round(self.max_prediction_time / self.dt))
+        t = 0.0
+        for _ in range(n_steps):
+            prev_pos, prev_vel = pos, vel
+            pos, vel = self._drag_rk4_step(pos, vel, self.dt, inv_L)
+            t += self.dt
 
-        for _ in range(iters):
-            tM = 0.5 * (tL + tH)
-            fM = f(tM)
-            left = (fL * fM) <= 0.0
-            tH = torch.where(left, tM, tH)
-            fH = torch.where(left, fM, fH)
-            tL = torch.where(left, tL, tM)
-            fL = torch.where(left, fL, fM)
+            # First descending crossing of the interception height.
+            crossed = (~found) & (prev_pos[..., 2] > z_int) & (pos[..., 2] <= z_int) & (vel[..., 2] < 0.0)
+            if crossed.any():
+                # Sub-step linear interpolation of the crossing point for a smoother estimate.
+                denom = (prev_pos[..., 2] - pos[..., 2]).clamp(min=1e-6)
+                frac = ((prev_pos[..., 2] - z_int) / denom).clamp(0.0, 1.0)  # (N,T)
+                pos_c = prev_pos + (pos - prev_pos) * frac.unsqueeze(-1)
+                vel_c = prev_vel + (vel - prev_vel) * frac.unsqueeze(-1)
+                pos_int = torch.where(crossed.unsqueeze(-1), pos_c, pos_int)
+                vel_int = torch.where(crossed.unsqueeze(-1), vel_c, vel_int)
+                t_int = torch.where(crossed, (t - self.dt) + frac * self.dt, t_int)
+                found = found | crossed
+                if found.all():
+                    break
 
-        t_intercept = 0.5 * (tL + tH)
-        t_intercept = torch.where(has_down, t_intercept, torch.full_like(t_intercept, dt_max))
-        t_intercept = torch.clamp(t_intercept, 0.0, dt_max)
+        # Shuttles that never crossed: use the state at max_prediction_time.
+        not_found = ~found
+        if not_found.any():
+            pos_int = torch.where(not_found.unsqueeze(-1), pos, pos_int)
+            vel_int = torch.where(not_found.unsqueeze(-1), vel, vel_int)
 
-        return t_intercept
+        return t_int, pos_int, vel_int

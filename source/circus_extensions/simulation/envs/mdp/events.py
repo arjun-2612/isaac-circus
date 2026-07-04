@@ -133,6 +133,25 @@ def push_robot_under_wrench_assist(
     asset.write_root_velocity_to_sim(vel_w, env_ids=env_ids)
 
 
+def randomize_command_restitution(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    command_name: str,
+    restitution_range: tuple[float, float],
+):
+    """Randomize the racket-shuttle coefficient of restitution per environment.
+
+    The impact restitution is uncertain and speed-dependent in reality, so it is resampled per
+    episode to make the policy robust to the true value (to be pinned down later by system-ID
+    against real hits recorded with the mocap rig).
+    """
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device)
+    cmd = env.command_manager.get_term(command_name)
+    lo, hi = restitution_range
+    cmd.restitution[env_ids] = sample_uniform(lo, hi, (len(env_ids),), env.device)
+
+
 def reset_joints_around_default(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,

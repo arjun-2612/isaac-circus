@@ -41,7 +41,7 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     racket_swing_speed_target: float = 4.0
     """Target swing speed [m/s]."""
 
-    restitution: float = 0.4
+    restitution: float = 0.85
     """Coefficient of restitution for the racket-shuttle impact (1.0 = perfectly elastic)."""
 
     contact_radius: float = 0.25
@@ -49,6 +49,12 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
 
     Interceptions where the racket is farther than this are treated as misses: the shuttle
     passes through untouched instead of being deflected.
+    """
+
+    aero_length: float = 4.1
+    """Shuttlecock aerodynamic length L [m] for the quadratic drag model dv/dt = g - ||v||*v/L.
+
+    L = 2m/(rho*S*C_D) (Cohen et al. 2015). Sets the terminal velocity sqrt(g*L) ~= 6.3 m/s.
     """
 
     @configclass
