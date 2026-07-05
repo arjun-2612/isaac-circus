@@ -412,12 +412,6 @@ class SpotBadmintonRewardsCfg:
     # -- penalties
     legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_smoothness_penalty, weight=-0.5)
     arm_action_smoothness = RewardTermCfg(func=spot_mdp.arm_action_smoothness_penalty, weight=-0.01)
-    base_motion = RewardTermCfg(
-        func=spot_mdp.base_motion_penalty, weight=-2.0, params={"asset_cfg": SceneEntityCfg("robot")}
-    )
-    # base_orientation = RewardTermCfg(
-    #     func=spot_mdp.base_orientation_penalty, weight=-3.0, params={"asset_cfg": SceneEntityCfg("robot")}
-    # )
     base_height = RewardTermCfg(
         func=spot_mdp.isaac.base_height_l2, 
         weight=-15.0, 
