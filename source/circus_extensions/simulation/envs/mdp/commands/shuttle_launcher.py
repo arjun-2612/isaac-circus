@@ -59,6 +59,12 @@ class ShuttleLauncherCommand(CommandTerm):
         self.meas_vel_bias = torch.zeros((self.num_envs, 3), device=self.device)
         self.meas_time_rel_bias = torch.zeros((self.num_envs,), device=self.device)
 
+        # Placement (post-hit return): filled at the bounce. Landing xy is relative to the court
+        # origin (env origin); net_clearance is the trajectory height at the net plane minus net
+        # height. Defaults keep a MISS (no bounce) at ~0 placement reward.
+        self.predicted_landing_local = torch.zeros((self.num_envs, 2), device=self.device)
+        self.net_clearance = torch.full((self.num_envs,), -1.0e3, device=self.device)
+
         # Constants
         self.g = 9.81
         self.g_vec = torch.tensor([0.0, 0.0, -self.g], device=self.device)  # gravity as a vector
@@ -70,6 +76,8 @@ class ShuttleLauncherCommand(CommandTerm):
         self.meas_pos_noise = cfg.meas_pos_noise
         self.meas_vel_noise = cfg.meas_vel_noise
         self.meas_time_rel_noise = cfg.meas_time_rel_noise
+        self.net_offset_x = cfg.net_offset_x
+        self.net_height = cfg.net_height
         self.max_prediction_time = 3.5
         self.active_env_ids = torch.tensor([], device=self.device, dtype=torch.int64)
 
@@ -245,6 +253,7 @@ class ShuttleLauncherCommand(CommandTerm):
         self.achieved_racket_speed[env_ids] = 0.0
         self.at_intercept[env_ids] = False
         self._resample_measurement_bias(env_ids)
+        self.net_clearance[env_ids] = -1.0e3
 
     def _update_command(self):
         mask = self.time_since_last_resample >= self.time_between_targets
@@ -269,6 +278,7 @@ class ShuttleLauncherCommand(CommandTerm):
                 self.current_intercept_pos_w[valid_ids] = self.shuttle_interception_pos_w[valid_ids, t_idx].clone()
                 self.current_intercept_vel_w[valid_ids] = self.shuttle_interception_vel_w[valid_ids, t_idx].clone()
                 self._resample_measurement_bias(valid_ids)
+                self.net_clearance[valid_ids] = -1.0e3
 
         # Step the shuttle trajectory one control step under quadratic drag.
         active = self.active_env_ids
@@ -354,6 +364,16 @@ class ShuttleLauncherCommand(CommandTerm):
 
         self.shuttle_vel_w[hit_ids] = v_rel_out + v_racket
 
+        # Placement: roll the post-hit trajectory forward to estimate where it lands and how high
+        # it crosses the net plane (both feed the placement reward). Court origin = env origin.
+        origin_xy = self._env.scene.env_origins[hit_ids, :2]
+        net_x_w = origin_xy[:, 0] + self.net_offset_x
+        landing_w, net_z = self._predict_landing(
+            self.shuttle_pos_w[hit_ids], self.shuttle_vel_w[hit_ids], self.L[hit_ids], net_x_w
+        )
+        self.predicted_landing_local[hit_ids] = landing_w - origin_xy
+        self.net_clearance[hit_ids] = net_z - self.net_height
+
     """
     Debug visualization.
     """
@@ -390,6 +410,50 @@ class ShuttleLauncherCommand(CommandTerm):
         new_pos = pos + (dt / 6.0) * (k1x + 2.0 * k2x + 2.0 * k3x + k4x)
         new_vel = vel + (dt / 6.0) * (k1v + 2.0 * k2v + 2.0 * k3v + k4v)
         return new_pos, new_vel
+
+    def _predict_landing(self, pos0, vel0, L, net_x):
+        """Roll the post-hit shuttle forward (coarse RK4) to estimate its landing xy and its height
+        as it crosses the net plane ``x = net_x``. Used by the placement reward.
+
+        Returns ``(landing_xy [H,2] world, net_z [H] world)``. Shuttles that never cross the net
+        (wrong direction / fall short) get ``net_z = -1e3`` so they score no clearance; ones that
+        never land within the horizon keep their launch xy (also far from any target -> ~0 reward).
+        """
+        inv_L = (1.0 / L).unsqueeze(-1)  # (H,1)
+        pos, vel = pos0.clone(), vel0.clone()
+
+        crossed_net = torch.zeros(pos0.shape[0], dtype=torch.bool, device=self.device)
+        net_z = torch.full((pos0.shape[0],), -1.0e3, device=self.device)
+        landed = torch.zeros(pos0.shape[0], dtype=torch.bool, device=self.device)
+        landing_xy = pos0[:, :2].clone()
+
+        dt_coarse = 5.0 * self.dt  # a landing estimate doesn't need control-rate fidelity
+        n_steps = int(round(3.0 / dt_coarse))
+        for _ in range(n_steps):
+            prev = pos
+            pos, vel = self._drag_rk4_step(pos, vel, dt_coarse, inv_L)
+
+            # Net-plane crossing (moving +X through x = net_x): record interpolated height.
+            nc = (~crossed_net) & (prev[:, 0] < net_x) & (pos[:, 0] >= net_x)
+            if nc.any():
+                denom = (pos[:, 0] - prev[:, 0]).clamp(min=1e-6)
+                frac = ((net_x - prev[:, 0]) / denom).clamp(0.0, 1.0)
+                net_z = torch.where(nc, prev[:, 2] + (pos[:, 2] - prev[:, 2]) * frac, net_z)
+                crossed_net = crossed_net | nc
+
+            # Ground landing (descending through z = 0): record interpolated xy.
+            ld = (~landed) & (prev[:, 2] > 0.0) & (pos[:, 2] <= 0.0) & (vel[:, 2] < 0.0)
+            if ld.any():
+                denom = (prev[:, 2] - pos[:, 2]).clamp(min=1e-6)
+                frac = (prev[:, 2] / denom).clamp(0.0, 1.0)
+                xy = prev[:, :2] + (pos[:, :2] - prev[:, :2]) * frac.unsqueeze(-1)
+                landing_xy = torch.where(ld.unsqueeze(-1), xy, landing_xy)
+                landed = landed | ld
+
+            if bool(landed.all()):
+                break
+
+        return landing_xy, net_z
 
     def _predict_interception(self, pos0, vel0, L):
         """Forward-integrate sampled shuttles until they descend through the interception height.

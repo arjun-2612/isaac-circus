@@ -97,6 +97,8 @@ class SpotBadmintonCommandsCfg:
         restitution=0.8,
         contact_radius=0.225,
         aero_length=4.1,
+        net_offset_x=3.0,
+        net_height=1.55,
         ee_frame=SceneEntityCfg("spot_badminton_ee"),
         asset_cfg=SceneEntityCfg("robot", body_names="arm0_racket_face"),
         success_threshold=0.3,
@@ -294,6 +296,15 @@ class SpotBadmintonEventCfg:
         },
     )
 
+    randomize_restitution = EventTerm(
+        func=spot_mdp.randomize_command_restitution,
+        mode="startup",
+        params={
+            "command_name": "shuttle_launcher",
+            "restitution_range": (0.4, 0.7),
+        },
+    )
+
     # reset
     reset_base = EventTerm(
         func=spot_mdp.isaac.reset_root_state_uniform,
@@ -319,15 +330,6 @@ class SpotBadmintonEventCfg:
             "position_range": (-0.2, 0.2),
             "velocity_range": (-0.0, 0.0),
             "asset_cfg": SceneEntityCfg("robot"),
-        },
-    )
-
-    randomize_restitution = EventTerm(
-        func=spot_mdp.randomize_command_restitution,
-        mode="reset",
-        params={
-            "command_name": "shuttle_launcher",
-            "restitution_range": (0.4, 0.7),
         },
     )
 
@@ -378,6 +380,18 @@ class SpotBadmintonRewardsCfg:
         },
     )
 
+    # -- task: return placement
+    # placement = RewardTermCfg(
+    #     func=spot_mdp.placement_reward,
+    #     weight=2000.0,
+    #     params={
+    #         "command_name": "shuttle_launcher",
+    #         "target": (5.0, 0.0),
+    #         "pos_std": 2.0,
+    #         "clearance_scale": 0.2,
+    #     },
+    # )
+
     # -- auxiliary
     face_net = RewardTermCfg(
         func=spot_mdp.face_net_reward,
@@ -397,7 +411,13 @@ class SpotBadmintonRewardsCfg:
 
     # -- penalties
     legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_smoothness_penalty, weight=-0.5)
-    arm_action_smoothness = RewardTermCfg(func=spot_mdp.arm_action_smoothness_penalty, weight=-0.02)
+    arm_action_smoothness = RewardTermCfg(func=spot_mdp.arm_action_smoothness_penalty, weight=-0.01)
+    # base_motion = RewardTermCfg(
+    #     func=spot_mdp.base_motion_penalty, weight=-2.0, params={"asset_cfg": SceneEntityCfg("robot")}
+    # )
+    # base_orientation = RewardTermCfg(
+    #     func=spot_mdp.base_orientation_penalty, weight=-3.0, params={"asset_cfg": SceneEntityCfg("robot")}
+    # )
     base_height = RewardTermCfg(
         func=spot_mdp.isaac.base_height_l2, 
         weight=-15.0, 
@@ -424,6 +444,11 @@ class SpotBadmintonRewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="[fh][lr]_.*"),
         },
+    )
+    joint_vel = RewardTermCfg(
+        func=spot_mdp.joint_velocity_penalty,
+        weight=-1.0e-3,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names="[fh][lr]_.*")},
     )
     joint_torques = RewardTermCfg(
         func=spot_mdp.joint_torques_penalty,

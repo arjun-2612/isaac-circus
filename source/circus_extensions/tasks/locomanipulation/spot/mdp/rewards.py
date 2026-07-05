@@ -47,7 +47,10 @@ def ee_velocity_tracking_reward(
     asset = env.scene[asset_cfg.name]
     cmd: ShuttleLauncherCommand = env.command_manager.get_term("shuttle_launcher")
 
-    ee_vel_w = asset.data.body_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
+    # True racket velocity = racket velocity - base velocity
+    # Remove base velocity from hacking the reward
+    ee_vel_w = asset.data.body_vel_w[:, asset_cfg.body_ids, :3].squeeze(1).clone()
+    ee_vel_w[:, 2] = ee_vel_w[:, 2] - torch.abs(asset.data.root_lin_vel_w[:, 2])
 
     swing_dir = -cmd.interception_vel.clone()
     swing_dir[:, 2] = swing_dir[:, 2] + 1.0
@@ -89,6 +92,31 @@ def ee_orientation_tracking_reward(
     cos_dist = 1.0 - torch.sum(ee_normal_w * target_normal, dim=-1)
     reward = 1.0 / (1.0 + cos_dist ** 2 / std)
     return reward * cmd.at_intercept_time.float()
+
+
+def placement_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str = "shuttle_launcher",
+    target: tuple[float, float] = (5.0, 0.0),
+    pos_std: float = 2.0,
+    clearance_scale: float = 0.2,
+) -> torch.Tensor:
+    """Reward returning the shuttle over the net into the opponent court.
+
+    Fires only at the interception instant (like the other task rewards). At the bounce the
+    post-hit trajectory is rolled forward to estimate the landing point (relative to the court
+    origin) and the height at which it crosses the net plane. Reward = (net cleared) x (landing
+    near ``target``), a broad kernel so it rewards a REGION, not a pinpoint. A missed hit leaves
+    ``net_clearance`` very negative -> ~0 reward.
+    """
+    cmd: ShuttleLauncherCommand = env.command_manager.get_term(command_name)
+
+    target_t = torch.tensor(target, device=env.device)
+    dist_sq = torch.sum((cmd.predicted_landing_local - target_t) ** 2, dim=-1)
+    land_reward = torch.exp(-dist_sq / (pos_std ** 2))
+    cleared = torch.sigmoid(cmd.net_clearance / clearance_scale)  # ~0 into-net/short, ~1 well over
+
+    return cleared * land_reward * cmd.at_intercept_time.float()
 
 
 def stand_still_reward(
@@ -147,3 +175,10 @@ def impact_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEnti
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.sum(torch.square(asset.data.body_lin_acc_w[:, asset_cfg.body_ids, 2]), dim=1)
+
+
+def joint_velocity_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize joint velocities on the articulation."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.linalg.norm((asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)

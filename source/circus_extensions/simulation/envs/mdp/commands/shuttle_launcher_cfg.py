@@ -72,6 +72,13 @@ class ShuttleLauncherCommandCfg(CommandTermCfg):
     meas_time_rel_noise: float = 0.1
     """Relative error on the predicted time-to-interception (fraction of time-to-go)."""
 
+    # --- Placement (Phase 5): court geometry for the post-hit return reward ---
+    net_offset_x: float = 3.0
+    """Net plane as a +X offset from the court origin (env origin) [m]."""
+
+    net_height: float = 1.55
+    """Net height [m]; the returned shuttle must clear this where it crosses the net plane."""
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""
