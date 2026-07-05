@@ -23,6 +23,7 @@ from rsl_rl.modules import (
 )
 from rsl_rl.utils import store_code_state
 from .actor_critic_encoder import ActorCriticEncoder
+from .exporter import export_policy_as_onnx
 
 
 class SSLOnPolicyRunner:
@@ -430,6 +431,25 @@ class SSLOnPolicyRunner:
         # upload model to external logging service
         if self.logger_type in ["neptune", "wandb"] and not self.disable_logs:
             self.writer.save_model(path, self.current_learning_iteration)
+
+        # -- Also export an ONNX policy so both formats are available to download (e.g. from W&B).
+        # Fixed filename -> a single rolling copy that overwrites/re-syncs each save (latest only).
+        # Wrapped so an export failure never kills a long training run.
+        try:
+            onnx_dir = os.path.dirname(path)
+            # obs_normalizer is an nn.Identity when empirical normalization is off (matches play.py).
+            export_policy_as_onnx(
+                self.alg.policy, path=onnx_dir, normalizer=self.obs_normalizer, filename="policy.onnx"
+            )
+            # re-sync the rolling ONNX file(s) to the logging service alongside the .pt
+            if self.logger_type in ["neptune", "wandb"] and not self.disable_logs:
+                self.writer.save_model(os.path.join(onnx_dir, "policy.onnx"), self.current_learning_iteration)
+                # ActorCriticEncoder policies also emit a separate encoder.onnx
+                encoder_onnx = os.path.join(onnx_dir, "encoder.onnx")
+                if os.path.exists(encoder_onnx):
+                    self.writer.save_model(encoder_onnx, self.current_learning_iteration)
+        except Exception as e:  # noqa: BLE001
+            print(f"[WARNING] ONNX export failed at iter {self.current_learning_iteration}: {e}")
 
     def load(self, path: str, load_optimizer: bool = True):
         loaded_dict = torch.load(path, weights_only=False)
