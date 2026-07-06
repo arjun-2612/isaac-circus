@@ -29,7 +29,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 # Custom SS Lab Imports
 from circus_extensions.simulation.envs import ManagerBasedRLEnvCfg
 from circus_extensions.simulation.terrains import TerrainImporterCfg
-import sslab_extensions.tasks.navigation.husky_beta.mdp as huskyb_mdp
+import circus_extensions.tasks.navigation.husky_beta.mdp as huskyb_mdp
 from circus_extensions.assets.husky_beta import HUSKY_B_CFG # isort: skip
 from circus_extensions.tasks.locomotion.husky_beta.dtc_env_cfg import HuskyBetaDTCEnvCfg # isort: skip
 from circus_extensions.tasks.locomotion.husky_beta.flight_env_cfg import HuskyBetaFlightEnvCfg

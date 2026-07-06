@@ -152,6 +152,26 @@ def randomize_command_restitution(
     cmd.restitution[env_ids] = sample_uniform(lo, hi, (len(env_ids),), env.device)
 
 
+def randomize_command_aero_length(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    command_name: str,
+    aero_length_range: tuple[float, float],
+):
+    """Randomize the shuttlecock aerodynamic length L per episode (drag domain randomization).
+
+    L = 2m/(rho*S*C_D) sets how hard the shuttle decelerates (terminal velocity = sqrt(g*L)). The
+    real value is uncertain -- mocap-marker mass, feather wear, air density (temp/humidity), and the
+    single-L quadratic model being an approximation all shift it -- so sampling it per episode makes
+    the policy robust to the true drag rather than overfitting the nominal.
+    """
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device)
+    cmd = env.command_manager.get_term(command_name)
+    lo, hi = aero_length_range
+    cmd.L[env_ids] = sample_uniform(lo, hi, (len(env_ids),), env.device)
+
+
 def reset_joints_around_default(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,
@@ -202,7 +222,7 @@ def randomize_flight_spawn(
     For walk-mode envs: no change (mode stays 0 from action term reset).
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    action_term: HuskyBetaMultimodalJointPosAction = env.action_manager.get_term(action_name)
+    action_term = env.action_manager.get_term(action_name)
 
     # Randomly select which envs spawn in flight
     rand = torch.rand(len(env_ids), device=env.device)

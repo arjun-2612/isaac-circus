@@ -305,6 +305,15 @@ class SpotBadmintonEventCfg:
         },
     )
 
+    randomize_aero_length = EventTerm(
+        func=spot_mdp.randomize_command_aero_length,
+        mode="startup",
+        params={
+            "command_name": "shuttle_launcher",
+            "aero_length_range": (3.5, 5.0),
+        },
+    )
+
     # reset
     reset_base = EventTerm(
         func=spot_mdp.isaac.reset_root_state_uniform,
