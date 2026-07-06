@@ -43,3 +43,6 @@ For more information about the workflow design patterns, see the `Task Design Wo
 """
 
 from . import mdp
+from .manager_based_rl_env import CircusManagerBasedRLEnv
+from .manager_based_rl_env_cfg import CircusManagerBasedRLEnvCfg
+from .manager_based_rl_env_window import CircusManagerBasedRLEnvWindow

@@ -20,7 +20,7 @@ from circus_extensions.simulation.terrains import TerrainImporter
 import isaaclab.utils.math as math_utils
 
 if TYPE_CHECKING:
-    from isaaclab.envs import ManagerBasedRLEnv
+    from circus_extensions.simulation.envs import CircusManagerBasedRLEnv
     from isaaclab.managers import RewardTermCfg
 
 
@@ -28,21 +28,21 @@ if TYPE_CHECKING:
 # Task Rewards
 ##
 
-def position_command_error_tanh(env: ManagerBasedRLEnv, std: float, command_name: str) -> torch.Tensor:
+def position_command_error_tanh(env: CircusManagerBasedRLEnv, std: float, command_name: str) -> torch.Tensor:
     """Reward position tracking with tanh kernel."""
     command = env.command_manager.get_command(command_name)
     des_pos_b = command[:, :3]
     distance = torch.norm(des_pos_b, dim=1)
     return 1 - torch.tanh(distance / std)
 
-def heading_command_error_abs(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
+def heading_command_error_abs(env: CircusManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     """Penalize tracking orientation error."""
     command = env.command_manager.get_command(command_name)
     heading_b = command[:, 3]
     return heading_b.abs()
 
 def mode_based_on_obstacle_proximity_reward(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     sensor_cfg: SceneEntityCfg,
     mm_command: str,
     wall_threshold: float = 0.2,
@@ -80,7 +80,7 @@ def mode_based_on_obstacle_proximity_reward(
     return obstacle_proximity_reward
 
 def position_tracking_with_mode(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     sensor_cfg: SceneEntityCfg,
     mm_command: str,
     std: float, 
@@ -125,7 +125,7 @@ def position_tracking_with_mode(
     return reward
 
 def foot_target_tracking_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     command_name: str,
     std: float,
     asset_cfg: SceneEntityCfg,
@@ -152,7 +152,7 @@ def foot_target_tracking_reward(
     return reward
 
 def swing_target_tracking_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     command_name: str,
     std: float,
     asset_cfg: SceneEntityCfg,
@@ -179,7 +179,7 @@ def swing_target_tracking_reward(
     return reward
 
 def foot_force_tracking_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     command_name: str,
     sensor_cfg: SceneEntityCfg,
     std: float,
@@ -191,7 +191,7 @@ def foot_force_tracking_reward(
     return torch.exp(-torch.sum(error, dim=1) / std)
 
 def joint_target_tracking_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     command_name: str,
     asset_cfg: SceneEntityCfg,
     std: float,
@@ -203,7 +203,7 @@ def joint_target_tracking_reward(
     return torch.exp(-error / std)
 
 def total_tracking_reward(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     score_relative_weight: float = 1.0,
     reference_name: str = "motion_references",
 ) -> torch.Tensor:
@@ -215,7 +215,7 @@ def total_tracking_reward(
 
     return total_reward
 
-def undesired_contacts_in_mode(env: ManagerBasedRLEnv, command_name: str, mode: int, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+def undesired_contacts_in_mode(env: CircusManagerBasedRLEnv, command_name: str, mode: int, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize when the contact force on the sensor exceeds the force threshold in specific mode."""
     # extract the used quantities (to enable type-hinting)
     command_term: HuskyBetaMultimodalJointPosCommand = env.command_manager.get_term(command_name)
@@ -226,11 +226,11 @@ def undesired_contacts_in_mode(env: ManagerBasedRLEnv, command_name: str, mode: 
     # sum over contacts for each environment
     return torch.sum(is_contact, dim=1) * (command_term.mode == mode).float()
 
-def bias(env: ManagerBasedRLEnv) -> torch.Tensor:
+def bias(env: CircusManagerBasedRLEnv) -> torch.Tensor:
     return torch.ones(env.num_envs, device=env.device)
 
 def flight_mode_cost(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     command_name: str = "multimodal_command", 
 ) -> torch.Tensor:
     """Constant penalty for being in flight mode."""
@@ -239,7 +239,7 @@ def flight_mode_cost(
     return in_flight
 
 def goal_reached_bonus(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     command_name: str,
 ) -> torch.Tensor:
     """Bonus for actually reaching goal (XYZ)."""
@@ -247,7 +247,7 @@ def goal_reached_bonus(
     return (cmd.metrics["settled_steps"] > 0).float()
 
 def unsafe_switch_to_walk(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     command_name: str, 
     asset_cfg: SceneEntityCfg, 
     sensor_cfg: SceneEntityCfg,
@@ -281,7 +281,7 @@ def unsafe_switch_to_walk(
     bad_switch = switching_to_walk & (~close_to_ground).squeeze(-1)
     return bad_switch.float()
 
-def mode_persistence_penalty(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
+def mode_persistence_penalty(env: CircusManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     command: HuskyBetaMultimodalJointPosCommand = env.command_manager.get_term(command_name)
     mode = command.mode
     prev_mode = command.prev_mode
@@ -289,14 +289,14 @@ def mode_persistence_penalty(env: ManagerBasedRLEnv, command_name: str) -> torch
     changed_mode = (mode != prev_mode).float()
     return changed_mode
 
-def no_vel_at_goal(env: ManagerBasedRLEnv, mm_command: str, pose_command: str, distance_threshold: float) -> torch.Tensor:
+def no_vel_at_goal(env: CircusManagerBasedRLEnv, mm_command: str, pose_command: str, distance_threshold: float) -> torch.Tensor:
     cmd = env.command_manager.get_command(pose_command)
     mm_cmd: HuskyBetaMultimodalJointPosCommand = env.command_manager.get_term(mm_command)
     is_at_goal = (torch.norm(cmd[:, :3], dim=1) < distance_threshold).float()
     has_velocity = (torch.norm(mm_cmd.desired_velocity[:, :3], dim=1) > 0.1).float()
     return is_at_goal * has_velocity
 
-def vz_command_in_walk_penalty(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
+def vz_command_in_walk_penalty(env: CircusManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     command: HuskyBetaMultimodalJointPosCommand = env.command_manager.get_term(command_name)
 
     in_walk_mode = (command.mode == 0).float()
@@ -307,7 +307,7 @@ def vz_command_in_walk_penalty(env: ManagerBasedRLEnv, command_name: str) -> tor
     return penalty
 
 def height_difference_flight_bonus(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,
     pose_command_name: str,
     multimodal_command_name: str,
@@ -336,7 +336,7 @@ def height_difference_flight_bonus(
     return reward
 
 def air_time_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg,
     mode_time: float,
     velocity_threshold: float,
@@ -379,7 +379,7 @@ def air_time_reward(
 
 
 def base_angular_velocity_reward(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg, 
     std: float, 
     command_name: str = "base_velocity",
@@ -394,7 +394,7 @@ def base_angular_velocity_reward(
 
 
 def base_height_reward(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg, 
     std: float, 
     command_name: str = "base_velocity",
@@ -409,7 +409,7 @@ def base_height_reward(
 
 
 def base_linear_velocity_reward(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg, 
     std: float, 
     command_name: str = "base_velocity",
@@ -431,7 +431,7 @@ class GaitReward(ManagerTermBase):
     quadrupedal gaits with two pairs of synchronized feet.
     """
 
-    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+    def __init__(self, cfg: RewardTermCfg, env: CircusManagerBasedRLEnv):
         """Initialize the term.
 
         Args:
@@ -458,7 +458,7 @@ class GaitReward(ManagerTermBase):
 
     def __call__(
         self,
-        env: ManagerBasedRLEnv,
+        env: CircusManagerBasedRLEnv,
         std: float,
         max_err: float,
         velocity_threshold: float,
@@ -531,7 +531,7 @@ class GaitReward(ManagerTermBase):
 
 
 def foot_clearance_reward(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg, 
     target_height: float, 
     std: float, 
@@ -560,7 +560,7 @@ def foot_clearance_reward(
 ##
 
 def base_height_abs(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     target_height: float,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     sensor_cfg: SceneEntityCfg | None = None,
@@ -584,7 +584,7 @@ def base_height_abs(
     return torch.abs(asset.data.root_pos_w[:, 2] - adjusted_target_height)
 
 
-def base_rp_motion_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def base_rp_motion_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize base roll/pitch velocity"""
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -594,14 +594,14 @@ def base_rp_motion_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) ->
     return penalty
 
 
-def base_z_motion_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def base_z_motion_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize base vertical velocity"""
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     return torch.square(asset.data.root_lin_vel_b[:, 2])
 
 
-def undesired_contacts(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+def undesired_contacts(env: CircusManagerBasedRLEnv, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize undesired contacts as the number of violations that are above a threshold."""
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
@@ -612,7 +612,7 @@ def undesired_contacts(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: Sce
     return torch.sum(is_contact, dim=1)
 
 
-def foot_trip_penalty(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+def foot_trip_penalty(env: CircusManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
     """
     Penalizes vertical contacts to discourage stubbing toes on stairs and tripping
 
@@ -631,7 +631,7 @@ def foot_trip_penalty(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> tor
 
 
 def foot_near_edge_penalty(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,
     sensor_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
@@ -664,28 +664,34 @@ def foot_near_edge_penalty(
     return torch.sum(is_edge, dim=-1)
 
 
-def action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+def action_smoothness_penalty(env: CircusManagerBasedRLEnv) -> torch.Tensor:
     """Penalize large instantaneous changes in the network action output"""
     return torch.linalg.norm((env.action_manager.action - env.action_manager.prev_action), dim=1)
 
 
-def legs_action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+def legs_action_smoothness_penalty(env: CircusManagerBasedRLEnv) -> torch.Tensor:
     """Penalize large instantaneous changes in the network action output for just leg joints"""
     return torch.linalg.norm((env.action_manager.action[:, :12] - env.action_manager.prev_action[:, :12]), dim=1)
 
 
-def arm_action_smoothness_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+def arm_action_smoothness_penalty(env: CircusManagerBasedRLEnv) -> torch.Tensor:
     """Penalize large instantaneous changes in the network action output for just arm joints"""
     return torch.linalg.norm((env.action_manager.action[:, 12:] - env.action_manager.prev_action[:, 12:]), dim=1)
 
 
-def action_smoothness_penalty_hlp(env: ManagerBasedRLEnv) -> torch.Tensor:
+def legs_action_jerk_penalty(env: CircusManagerBasedRLEnv) -> torch.Tensor:
+    """Second-order (jerk) action smoothness for the LEG joints -- targets high-frequency JITTER."""
+    jerk = env.action_manager.action[:, :12] - 2.0 * env.action_manager.prev_action[:, :12] + env.action_manager.prev_prev_action[:, :12]
+    return torch.linalg.norm(jerk, dim=1)
+
+
+def action_smoothness_penalty_hlp(env: CircusManagerBasedRLEnv) -> torch.Tensor:
     """Penalize large instantaneous changes in the network action output for only velocities"""
     return torch.linalg.norm((env.action_manager.action[:, :4] - env.action_manager.prev_action[:, :4]), dim=1)
 
 
 def air_time_variance_penalty(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     sensor_cfg: SceneEntityCfg, 
     command_name: str = "base_velocity",
 ) -> torch.Tensor:
@@ -712,7 +718,7 @@ def air_time_variance_penalty(
 
 
 # ! look into simplifying the kernel here; it's a little oddly complex
-def base_motion_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def base_motion_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize base vertical and roll/pitch velocity"""
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -721,7 +727,7 @@ def base_motion_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> to
     )
 
 
-def base_ang_vel_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def base_ang_vel_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize base vertical and roll/pitch velocity"""
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -730,7 +736,7 @@ def base_ang_vel_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> t
     )
 
 
-def base_orientation_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def base_orientation_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize non-flat base orientation
 
     This is computed by penalizing the xy-components of the projected gravity vector.
@@ -741,7 +747,7 @@ def base_orientation_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) 
 
 
 def foot_slip_penalty(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg, threshold: float
+    env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg, threshold: float
 ) -> torch.Tensor:
     """Penalize foot planar (xy) slip when in contact with the ground"""
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -758,7 +764,7 @@ def foot_slip_penalty(
 
 
 def power_penalty(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sharpness: float = 0.02, threshold: float = 40.0,
+    env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sharpness: float = 0.02, threshold: float = 40.0,
 ) -> torch.Tensor: 
     asset: Articulation = env.scene[asset_cfg.name]
     power = torch.sum(
@@ -770,7 +776,7 @@ def power_penalty(
 
 
 def joint_position_penalty(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg, 
     stand_still_scale: float, 
     velocity_threshold: float, 
@@ -785,7 +791,7 @@ def joint_position_penalty(
 
 
 def joint_dev_from_default(
-    env: ManagerBasedRLEnv, 
+    env: CircusManagerBasedRLEnv, 
     asset_cfg: SceneEntityCfg, 
 ) -> torch.Tensor:
     """Penalize joint position error from default on the articulation."""
@@ -795,14 +801,14 @@ def joint_dev_from_default(
     return penalty
 
 
-def joint_torques_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def joint_torques_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize joint torques on the articulation."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.linalg.norm((asset.data.applied_torque), dim=1)
 
 
-def stomping_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+def stomping_penalty(env: CircusManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize stomping while traversing the ground."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
@@ -810,7 +816,7 @@ def stomping_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch
 
 
 def high_contact_force_penalty(
-    env: ManagerBasedRLEnv,
+    env: CircusManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg,
     max_force: float = 50.0,
 ) -> torch.Tensor:

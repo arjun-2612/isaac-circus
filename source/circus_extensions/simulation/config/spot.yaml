@@ -6,7 +6,7 @@ task:
   name: Spot-Badminton-Train 
   num_envs: 4096
   headless: true
-  resume: true 
+  resume: false 
   run_folder: 2026-07-05_14-57-21
   checkpoint: model_1200.pt
 

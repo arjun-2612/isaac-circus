@@ -13,7 +13,7 @@ from . import agents
 
 gym.register(
     id="Spot-Badminton-Train",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="circus_extensions.simulation.envs.manager_based_rl_env:CircusManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.badminton_env_cfg:SpotBadmintonEnvCfg",
@@ -23,7 +23,7 @@ gym.register(
 
 gym.register(
     id="Spot-Badminton-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="circus_extensions.simulation.envs.manager_based_rl_env:CircusManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.badminton_env_cfg:SpotBadmintonEnvCfg_PLAY",

@@ -16,7 +16,6 @@ from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import OffsetCfg
@@ -25,6 +24,7 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.terrains import TerrainImporterCfg
 
+from circus_extensions.simulation.envs import CircusManagerBasedRLEnvCfg
 import circus_extensions.tasks.locomanipulation.spot.mdp as spot_mdp
 from circus_extensions.assets.spot import SPOT_BADMINTON_CFG, JOINT_ORDER # isort: skip
 
@@ -410,7 +410,7 @@ class SpotBadmintonRewardsCfg:
     )
 
     # -- penalties
-    legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_smoothness_penalty, weight=-0.5)
+    legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_jerk_penalty, weight=-0.5)
     arm_action_smoothness = RewardTermCfg(func=spot_mdp.arm_action_smoothness_penalty, weight=-0.01)
     base_height = RewardTermCfg(
         func=spot_mdp.isaac.base_height_l2, 
@@ -503,7 +503,7 @@ class SpotBadmintonCurriculumCfg:
 
 
 @configclass
-class SpotBadmintonEnvCfg(ManagerBasedRLEnvCfg):
+class SpotBadmintonEnvCfg(CircusManagerBasedRLEnvCfg):
     """Configuration for the Spot Badminton environment."""
 
     # Scene settings
