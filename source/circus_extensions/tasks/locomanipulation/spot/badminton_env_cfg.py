@@ -390,16 +390,16 @@ class SpotBadmintonRewardsCfg:
     )
 
     # -- task: return placement
-    # placement = RewardTermCfg(
-    #     func=spot_mdp.placement_reward,
-    #     weight=2000.0,
-    #     params={
-    #         "command_name": "shuttle_launcher",
-    #         "target": (5.0, 0.0),
-    #         "pos_std": 2.0,
-    #         "clearance_scale": 0.2,
-    #     },
-    # )
+    placement = RewardTermCfg(
+        func=spot_mdp.placement_reward,
+        weight=2000.0,
+        params={
+            "command_name": "shuttle_launcher",
+            "target": (5.0, 0.0),
+            "pos_std": 2.0,
+            "clearance_scale": 0.2,
+        },
+    )
 
     # -- auxiliary
     face_net = RewardTermCfg(
