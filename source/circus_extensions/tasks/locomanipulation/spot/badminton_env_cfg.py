@@ -419,7 +419,7 @@ class SpotBadmintonRewardsCfg:
     )
 
     # -- penalties
-    legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_jerk_penalty, weight=-0.5)
+    legs_action_smoothness = RewardTermCfg(func=spot_mdp.legs_action_jerk_penalty, weight=-1.0)
     arm_action_smoothness = RewardTermCfg(func=spot_mdp.arm_action_smoothness_penalty, weight=-0.01)
     base_height = RewardTermCfg(
         func=spot_mdp.isaac.base_height_l2, 
