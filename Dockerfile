@@ -145,9 +145,10 @@ RUN /isaac-sim/python.sh -m pip install -e source --no-cache-dir
 
 RUN /isaac-sim/python.sh -m pip install --no-cache-dir "numpy<2" "opencv-python<4.9" "qpth"
 
-RUN /isaac-sim/kit/python/bin/python3 -m pip install --no-cache-dir "setuptools<70" "wandb" \
-    && /isaac-sim/kit/python/bin/python3 -c "import pkg_resources; print('pkg_resources OK')" \
-    && /isaac-sim/kit/python/bin/python3 -c "import wandb; print('wandb OK')"
+# Install latest wandb to the main training Python environment (/isaac-sim/python.sh)
+RUN /isaac-sim/python.sh -m pip install --upgrade --no-cache-dir "setuptools<70" "wandb>=0.16.0" \
+    && /isaac-sim/python.sh -c "import pkg_resources; print('pkg_resources OK')" \
+    && /isaac-sim/python.sh -c "import wandb; print('wandb OK'); print('wandb version:', wandb.__version__)"
 
 # Helpful PYTHONPATH (pip -e already handles imports, but this can help dev)
 ENV PYTHONPATH="/workspace:/workspace/IsaacLab:${PYTHONPATH}"
