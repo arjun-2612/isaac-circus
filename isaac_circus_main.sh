@@ -308,7 +308,6 @@ mkdir -p "${KIT_CACHE}" "${KIT_DATA}" "${OV_CACHE}" "${OV_DATA}" "${OV_LOGS}" "$
 # Bind map (host -> container)
 BIND_LIST="/scratch:/scratch,\
 /projects/siliconsynapselab/sslab_isaaclab/outputs:/workspace/outputs,\
-${HOME}:/root,\
 ${KIT_CACHE}:/isaac-sim/kit/cache,\
 ${KIT_DATA}:/isaac-sim/kit/data,\
 ${OV_CACHE}:/root/.cache/ov,\
